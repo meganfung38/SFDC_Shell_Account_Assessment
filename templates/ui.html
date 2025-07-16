@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZoomInfo Quality Assessment API - UI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/ringcentral-theme.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="intro-banner">
+            <h2>🔍 ZoomInfo Quality Assessment API</h2>
+            <p style="font-size: 18px; margin: 0;">
+                <strong>Assess the quality and reliability of ZoomInfo-enriched lead data using AI-powered confidence scoring.</strong>
+            </p>
+            <p>
+                Identify enrichment gaps, suspicious data patterns, and get actionable insights to improve your lead quality.
+            </p>
+        </div>
+        
+        <!-- SOQL Query Analysis Endpoint -->
+        <div class="endpoint">
+            <h2><span class="method-badge post">POST</span>/leads/analyze-query</h2>
+            <div class="endpoint-description">
+                Analyze ZoomInfo enrichment quality across multiple leads from a custom SOQL query that returns Lead IDs only. Get AI confidence scores and explanations for data reliability issues.
+            </div>
+            
+            <form id="queryForm">
+                <label for="soqlQuery">SOQL Query - Must Return Lead IDs Only (optional - leave blank for random leads):</label>
+                <textarea id="soqlQuery" placeholder="⚠️ IMPORTANT: Query must return Lead IDs only!&#10;&#10;Valid examples:&#10;• Leave blank for random leads&#10;• WHERE Email LIKE '%@gmail.com'&#10;• LIMIT 50&#10;• SELECT Id FROM Lead WHERE Company = 'Acme'&#10;• SELECT Lead.Id FROM Lead JOIN Account ON...&#10;• SELECT Id FROM Lead WHERE... UNION SELECT Id FROM Lead WHERE...&#10;&#10;✅ JOINs & UNIONs allowed if they return Lead IDs only&#10;❌ Cannot select other fields like Name, Email, etc."></textarea>
+                
+                <div class="form-row">
+                    <div>
+                        <label for="previewLimit">Preview Limit (1-1000):</label>
+                        <input type="text" id="previewLimit" value="100">
+                    </div>
+                    <div>
+                        <label for="maxAnalyze">Max Leads to Analyze (1-500):</label>
+                        <input type="text" id="maxAnalyze" value="10">
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button type="button" id="previewBtn">1. Preview Query</button>
+                    <button type="submit" id="analyzeBtn" disabled>Get Confidence Assessment</button>
+                    <button type="button" id="exportBtn" disabled class="export-btn">📊 Export to Excel</button>
+                </div>
+            </form>
+            
+            <div id="queryResponse" class="response" style="display: none;"></div>
+        </div>
+        
+        <!-- Lead Confidence Assessment Endpoint -->
+        <div class="endpoint">
+            <h2><span class="method-badge get">GET</span>/lead/{id}/confidence</h2>
+            <div class="endpoint-description">
+                Get detailed AI-powered confidence assessment for a single lead's ZoomInfo enrichment quality with explanations, corrections, and inferences.
+            </div>
+            
+            <form id="confidenceForm">
+                <label for="leadId">Salesforce Lead ID:</label>
+                <input type="text" id="leadId" placeholder="00Q5e00000ABC123" maxlength="18">
+                
+                <div style="display: flex; gap: 10px;">
+                    <button type="submit">Get Confidence Assessment</button>
+                    <button type="button" id="exportConfidenceBtn" disabled class="export-btn">📊 Export to Excel</button>
+                </div>
+            </form>
+            
+            <div id="confidenceResponse" class="response" style="display: none;"></div>
+        </div>
+
+        <!-- Excel Upload Analysis Endpoint -->
+        <div class="endpoint">
+            <h2><span class="method-badge post">POST</span>/excel/analyze</h2>
+            <div class="endpoint-description">
+                Upload an Excel file containing Lead IDs for bulk analysis. The system will validate all Lead IDs, then analyze their ZoomInfo enrichment quality with AI confidence scoring. Export combines your original data with AI analysis results.
+            </div>
+            
+            <form id="excelForm" enctype="multipart/form-data">
+                <div class="excel-upload-section">
+                    <label for="excelFile">Excel File (.xlsx or .xls):</label>
+                    <input type="file" id="excelFile" accept=".xlsx,.xls" required>
+                    <button type="button" id="parseExcelBtn" disabled>1. Parse File</button>
+                </div>
+                
+                <div id="excelConfig" class="excel-config" style="display: none;">
+                    <div class="form-row">
+                        <div>
+                            <label for="sheetSelect">Sheet:</label>
+                            <select id="sheetSelect"></select>
+                        </div>
+                        <div>
+                            <label for="leadIdColumn">Lead ID Column:</label>
+                            <select id="leadIdColumn"></select>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button type="button" id="validateLeadIdsBtn" disabled>2. Validate Lead IDs</button>
+                        <button type="button" id="analyzeExcelBtn" disabled>3. Analyze All Leads</button>
+                        <button type="button" id="exportExcelBtn" disabled class="export-btn">📊 Export Results</button>
+                    </div>
+                </div>
+            </form>
+            
+            <div id="excelResponse" class="response" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/ui-handlers.js') }}"></script>
+</body>
+</html> 

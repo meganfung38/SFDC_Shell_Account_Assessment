@@ -1,71 +1,84 @@
-## **Project 1– ZoomInfo Quality Assessment**
+## **Project 3– SFDC Shell Account Assessment**
 
-### **What is ZoomInfo?** 
+### **SFDC Account Hierarchy** 
 
-* B2B data provider. They collect and maintain a large database of:   
-  * Companies   
-  * Contacts  
-  * Technographic data (what tools a company uses)   
-  * Buying intent signals   
-  * Etc.  
-* Used by sales, marketing, and recruiting teams to support:   
-  * Outreach \+ targeting   
-  * Personalization of messaging   
-  * Lead prioritization  
-* Streamlines data enrichment– process of taking a basic record (company name or email) → supplementing it with detailed information to make it more useful; ultimately helping sales reps reach the right people with the right context 
+* RC’s internal Salesforce system uses a structured account hierarchy to capture the relationships between company-level shell accounts and individual customer-level accounts.   
+* Account Hierarchy Purpose:   
+  * Organize and deduplicate data across free trials, leads, and customer accounts   
+  * Provide sales teams with a holistic view of all contacts and accounts associated with a company   
+  * Enable accurate reporting and account-based marketing by grouping related records under a single umbrella  
+  * Consolidate engagement insights and interactions at the company level   
+* Parent Account (Record Type: ZI Customer Shell Account)  
+  * A ZoomInfo enriched entity representing the master identity for a business or organization. Contains firmographic data like company name, website, and billing address.   
+* Child Account (Record Type: Customer Account)  
+  * Represents individuals or departments who sign up for a RC trial or service. Each record includes a parent id field referencing the shell account it belongs to
 
 ### **Problem Statement**
 
-* The RC Marketing and Sales Department is uncertain about the reliability/ accuracy of data   
-* Outdated, incomplete, incorrect information → low quality records potentially leading sales reps to waste time or make poor outreach decisions 
+* ZoomInfo-enriched shell accounts are designed to unify customer-level records under one corporate identity. However, inconsistencies in data and incorrect associations have led to misaligned parent-child relationships within SFDC. This introduces:   
+  * Poor data hygiene   
+  * Misleading sales attribution   
+  * Fragmented customer insights   
+  * Operational inefficiencies
+
 
 ### **Solution**
 
-* Conduct a quality assessment of ZoomInfo’s output by developing an AI driven confidence rating system for enriched records– paired with explanations to ensure transparency and actionability   
-* Steps:    
-1. Collect ZoomInfo-Enriched Records  
-* Columns to query: 
-
-| SFDC Column | Query ID  |
-| :---- | :---- |
-| *Demand Funnel : Lead : Lead ID* | Id |
-| *Demand Funnel : Lead : Email (input information for enrichment)*  | Email |
-| *RTLM Channel* | FIrst\_Channel\_\_c  |
-| *Segment Name* | SegmentName\_\_r.Name |
-| *Demand Funnel : Lead : Website*  | Website |
-| *Demand Funnel : Lead : Company* | Company  |
-| *Demand Funnel : Lead : No. of Employees*  | LS\_Company\_Size\_Range\_\_c |
-| *Demand Funnel : Lead : ZI Website (enriched)* | ZI\_Website\_\_c |
-| *Demand Funnel : Lead : Account Name (enriched)*  | ZI\_Company\_Name\_\_c |
-| *Demand Funnel : Lead : ZI Employees (enriched)*  | ZI\_Employees\_\_c |
-
-* Flags to look out for: 
-
-| Flags | Meaning  |
-| :---- | :---- |
-| not\_in\_TAM ZI\_Employees\_\_c \> 100 but ZI\_Company\_Name\_\_c NOT Populated | Accounts in the RC TAM (total addressable market) base include all accounts with 100+ employees This account should be enriched with an account name or is being incorrectly enriched for employee number |
-| suspicious\_enrichment Email has free email domain and Website NOT POPULATED and ZI\_Company\_Name\_\_c POPULATED and ZI\_Employees\_\_c \> 100 | Why are accounts with ambiguous email domains and no websites being enriched with an Account name (company) and other ZI data?  |
-
-2. Verify Data Accuracy \+ Information Discovery    
-* Inspect Website and ZI\_Employees\_\_c  
-  * Try to populate ZI\_Company\_Name\_\_c for RC TAM base  
-* Inspect Email  
-  * If there is additional information (company name) in email domain → use to infer Website and ZI\_Company\_Name\_\_c  
-  * Try to populate other fields using inferred information   
-* Cross check each record with sources  
-  * Public databases (LinkedIn, etc.), internal CRM or sales data  
-  * Does the Email match the enriched data? 
+* Build an automated system to evaluate the validity of SFDC account-to-shell-account relationships using field comparison and pattern analysis.   
+  * Inputs:   
+    * list of SFDC account IDs (via SOQL query or excel upload)   
+    * Single SFDC account ID   
+    * Single SFDC shell account ID (to trigger batch evaluation of its child accounts)  
+  * Output:   
+    * Confidence scoring (%) for each account-shell pairing that reflects the likelihood of a correct match   
+    * An explanation detailing why the score was assigned  
+    * Flags and metadata indicators for further review
 
     
 
-3. Build a Confidence Model   
-* Design either a rule based system, ML model, or prompt to LLM to:   
-  * Assess freshness of data  
-  * Compared against other trusted sources   
-  * Evaluate internal consistency   
-  * Incorporate outcome history, if applicable  
-* Output a confidence score (%) for each record or data point   
-4. Explainability   
-* Provide clear and concise explanations for why a particular confidence level was assigned  
-* Explanation layer should help build trust in the system and enable sales or operation teams to take actions accordingly  
-* A correction for incorrect fields
+* Steps:    
+1. Salesforce Data Extraction  
+* Shell and Customer Account data: 
+
+| Field  | API Name |
+| :---- | :---- |
+| *Id* | id |
+| *Account Name*  | Name |
+| *Ultimate Parent Account Name (shell account company/ organization)* | Ultimate\_Parent\_Account\_Name\_\_c |
+| *Website*  | Website |
+| *Billing Address*  | BillingStreet, BillingCity, BillingState, BillingCountry |
+| *ZI Company Name*  | ZI\_Company\_Name\_\_c |
+| *ZI Website* | ZI\_Website\_\_c  |
+
+* Additional Customer Account data: 
+
+| Field | API Name |
+| :---- | :---- |
+| *Parent Account ID* | Parent\_Account\_ID\_\_c |
+
+* Flags: 
+
+| Flags  | Meaning  |
+| :---- | :---- |
+| *Name\_Mismatch*  Find one match between (using fuzzy matching): shell account: Name, Ultimate\_Parent\_Account\_Name\_\_c, ZI\_Company\_Name\_\_c  customer account: Name, ZI\_Company\_Name\_\_c | Compares company name fields between customer and shell account. Calculates similarity score.  |
+| *MetaData\_Mismatch* Find one match between (using fuzzy matching): shell account: Website, ZI\_Website\_\_c  customer account: Website, ZI\_Website\_\_c OR shell account: BillingStreet, BillingCity, BillingState, BillingCountry  customer account: BillingStreet, BillingCity, BillingState, BillingCountry | Evaluates website and billing address fields. Use fuzzy logic to determine semantic similarity.  |
+
+2. Confidence Score Generation  
+* Design a hybrid model using fuzzy logic, contextual analysis, and LLM prompts to evaluate relationship validity  
+  * Flag verification: leverage Name\_Mismatch and MetaData\_Mismatch similarity scores   
+  * Outlier detection: compare a customer account’s attributes to its sibling accounts under the same shell. Identify accounts that deviate from the dominant patterns  
+  * Address relevance: semantically compare billing addresses. Identify if the child account is located in a region plausibly connected to the shell entity  
+  * Field website: assign different weights to each factor   
+    * Company name match \= high priority   
+    * Website match \= medium priority   
+    * Address match \= low priority   
+  * Edge cases: use AI to normalize noisy names, determine domain affliction, evaluate overall relationship coherence across fields  
+* Output a confidence score (%) for each customer account
+
+
+3. Explainability   
+* Clear explanation that describes:  
+  * Fields matched/ mismatched  
+  * Why score was assigned (should include actual calculations, just overall logic and understanding behind assignment)   
+  * Signals that influenced the score   
+* Transparency should help sales and operations teams trust the assessment and take action with clarity

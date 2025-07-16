@@ -23,10 +23,16 @@ def create_app(config_name=None):
     # Register blueprints
     app.register_blueprint(api_bp)
     
-    # Add UI route
+    # Serve UI at root path
+    @app.route('/')
+    def index():
+        """Serve the web UI using template"""
+        return render_template('ui.html')
+    
+    # Keep /ui route for backward compatibility
     @app.route('/ui')
     def ui():
-        """Serve the web UI using template"""
+        """Serve the web UI using template (legacy route)"""
         return render_template('ui.html')
     
     return app

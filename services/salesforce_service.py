@@ -1,5 +1,5 @@
 from simple_salesforce.api import Salesforce
-from config.config import Config, BAD_EMAIL_DOMAINS
+from config.config import Config
 from typing import Optional
 
 
@@ -65,13 +65,13 @@ class SalesforceService:
             if not self.ensure_connection():
                 return False, "Failed to establish connection"
             
-            # Simple test - query 5 Lead IDs
+            # Simple test - query 5 Account IDs
             assert self.sf is not None  # Type hint for linter
-            query_result = self.sf.query("SELECT Id FROM Lead LIMIT 5")
+            query_result = self.sf.query("SELECT Id FROM Account LIMIT 5")
             
             # If we get here, connection is working and we can query data
             record_count = len(query_result['records'])
-            return True, f"Connection successful - Retrieved {record_count} Lead records"
+            return True, f"Connection successful - Retrieved {record_count} Account records"
             
         except Exception as e:
             return False, f"Connection failed: {str(e)}"
@@ -86,139 +86,71 @@ class SalesforceService:
             "session_id": "Connected" if self.sf.session_id else "Not Connected",
             "api_version": self.sf.sf_version
         }
-    
-    def _is_free_email_domain(self, email):
-        """Check if email uses a free email domain"""
-        if not email:
-            return False
-        try:
-            domain = email.split('@')[1].lower()
-            return bool(domain in BAD_EMAIL_DOMAINS)
-        except (IndexError, AttributeError):
-            return False
-    
-    def _extract_email_domain(self, email):
-        """Extract domain from email address"""
-        if not email:
-            return None
-        try:
-            domain = email.split('@')[1].lower().strip()
-            return domain if domain else None
-        except (IndexError, AttributeError):
-            return None
-    
-    def _normalize_lead_record(self, lead_record):
-        """Normalize lead record by extracting relationship fields and cleaning up structure"""
-        # Handle SegmentName__r.Name relationship field
-        if 'SegmentName__r' in lead_record:
-            segment_obj = lead_record.get('SegmentName__r')
-            if segment_obj and isinstance(segment_obj, dict):
-                lead_record['SegmentName'] = segment_obj.get('Name')
-            else:
-                lead_record['SegmentName'] = None
-            # Remove the relationship object
-            del lead_record['SegmentName__r']
-        
-        # Remove Salesforce metadata if present
-        if 'attributes' in lead_record:
-            del lead_record['attributes']
-        
-        return lead_record
-    
-    def _analyze_lead_flags(self, lead_record):
-        """Analyze lead data and return business logic flags and email domain"""
-        # Extract values with explicit None handling
-        zi_employees = lead_record.get('ZI_Employees__c')
-        zi_company_name = lead_record.get('ZI_Company_Name__c')
-        email = lead_record.get('Email')
-        website = lead_record.get('Website')
-        
-        # Convert employee count to int if it exists, default to 0
-        try:
-            employee_count = int(zi_employees) if zi_employees is not None else 0
-        except (ValueError, TypeError):
-            employee_count = 0
-        
-        # Normalize string values - treat empty strings as None
-        zi_company_name = zi_company_name.strip() if zi_company_name else None
-        email = email.strip() if email else None
-        website = website.strip() if website else None
-        
-        # Extract email domain
-        email_domain = self._extract_email_domain(email)
-        
-        # Flag 1: not_in_TAM
-        # True when ZI_Employees__c > 100 AND ZI_Company_Name__c is null/empty
-        not_in_tam = bool(employee_count > 100 and not zi_company_name)
-        
-        # Flag 2: suspicious_enrichment  
-        # True when: free email domain AND no website AND has company name AND > 100 employees
-        has_free_email = self._is_free_email_domain(email)
-        has_no_website = not website  # website is null/empty
-        has_company_name = bool(zi_company_name)  # company name is populated
-        has_many_employees = employee_count > 100
-        
-        suspicious_enrichment = bool(
-            has_free_email and 
-            has_no_website and 
-            has_company_name and 
-            has_many_employees
-        )
-        
-        return {
-            'not_in_TAM': not_in_tam,
-            'suspicious_enrichment': suspicious_enrichment,
-            'email_domain': email_domain
-        }
-    
-    def get_lead_by_id(self, lead_id):
-        """Get specific Lead fields by Lead ID with business logic flags"""
+
+    def get_account_by_id(self, account_id):
+        """Get specific Account data by Account ID"""
         try:
             if not self.ensure_connection():
                 return None, "Failed to establish Salesforce connection"
             
-            # Query for specific ZoomInfo fields and additional enrichment data
+            # Validate Account ID format
+            account_id = str(account_id).strip()
+            if not account_id:
+                return None, "Account ID cannot be empty"
+            
+            # Basic Account ID format validation
+            if len(account_id) not in [15, 18]:
+                return None, f"Invalid Account ID format. Account IDs must be 15 or 18 characters long. Provided: '{account_id}' ({len(account_id)} characters)"
+            
+            if not account_id.startswith('001'):
+                return None, f"Invalid Account ID format. Account IDs must start with '001'. Provided: '{account_id}'"
+            
+            # Query for Account fields including custom fields
             query = """
-            SELECT Id, Email, First_Channel__c, 
-                   SegmentName__r.Name, LS_Company_Size_Range__c, Website, Company,
-                   ZI_Website__c, ZI_Company_Name__c, ZI_Employees__c
-            FROM Lead 
+            SELECT Id, Name, Ultimate_Parent_Account_Name__c, Website, 
+                   BillingStreet, BillingCity, BillingState, BillingCountry,
+                   ZI_Company_Name__c, ZI_Website__c, Parent_Account_ID__c
+            FROM Account 
             WHERE Id = '{}'
-            """.format(lead_id)
+            """.format(account_id)
             
             assert self.sf is not None  # Type hint for linter
             result = self.sf.query(query)
             
             if result['totalSize'] == 0:
-                return None, f"No Lead found with ID: {lead_id}"
+                return None, f"No Account found with ID: {account_id}. Please verify the Account ID exists in your Salesforce org."
             
-            # Get the lead record
-            lead_record = result['records'][0]
+            # Get the account record
+            account_record = result['records'][0]
             
-            # Normalize the lead record (handle relationship fields and cleanup)
-            lead_record = self._normalize_lead_record(lead_record)
-            
-            # Add business logic flags
-            flags = self._analyze_lead_flags(lead_record)
-            lead_record.update(flags)
+            # Remove Salesforce metadata if present
+            if 'attributes' in account_record:
+                del account_record['attributes']
                 
-            return lead_record, "Lead retrieved successfully with analysis"
+            return account_record, "Account retrieved successfully"
             
         except Exception as e:
-            return None, f"Error retrieving Lead: {str(e)}"
-    
-    def query_leads(self, query_conditions=None, limit=100):
-        """Query leads with optional conditions"""
+            error_msg = str(e)
+            # Provide cleaner error messages for common issues
+            if "invalid ID field" in error_msg.lower():
+                return None, f"Invalid Account ID: '{account_id}'. Please check the Account ID format and try again."
+            elif "malformed request" in error_msg.lower():
+                return None, f"Account ID '{account_id}' is not valid. Please provide a valid 15 or 18-character Salesforce Account ID."
+            else:
+                return None, f"Error retrieving Account: {error_msg}"
+
+    def query_accounts(self, query_conditions=None, limit=100):
+        """Query accounts with optional conditions"""
         try:
             if not self.ensure_connection():
                 return None, "Failed to establish Salesforce connection"
             
-            # Base query with ZoomInfo fields and additional enrichment data
+            # Base query with Account fields including custom fields
             base_query = """
-            SELECT Id, Email, First_Channel__c, 
-                   SegmentName__r.Name, LS_Company_Size_Range__c, Website, Company,
-                   ZI_Website__c, ZI_Company_Name__c, ZI_Employees__c
-            FROM Lead
+            SELECT Id, Name, Ultimate_Parent_Account_Name__c, Website, 
+                   BillingStreet, BillingCity, BillingState, BillingCountry,
+                   ZI_Company_Name__c, ZI_Website__c, Parent_Account_ID__c
+            FROM Account
             """
             
             # Add conditions if provided
@@ -231,15 +163,11 @@ class SalesforceService:
             assert self.sf is not None  # Type hint for linter
             result = self.sf.query(base_query)
             
-            # Clean up records by normalizing and adding flags
+            # Clean up records by removing metadata
             clean_records = []
             for record in result['records']:
-                # Normalize the lead record (handle relationship fields and cleanup)
-                record = self._normalize_lead_record(record)
-                
-                # Add business logic flags
-                flags = self._analyze_lead_flags(record)
-                record.update(flags)
+                if 'attributes' in record:
+                    del record['attributes']
                 clean_records.append(record)
             
             return {
@@ -251,50 +179,79 @@ class SalesforceService:
         except Exception as e:
             return None, f"Error executing query: {str(e)}"
 
-    def preview_soql_query(self, soql_query, limit=100):
-        """Preview SOQL query results - just return Lead IDs and count"""
-        import time
-        start_time = time.time()
-        
+    def validate_account_ids(self, account_ids):
+        """Validate that all provided Account IDs exist in Salesforce"""
         try:
             if not self.ensure_connection():
                 return None, "Failed to establish Salesforce connection"
             
-            # Validate SOQL query 
-            if not self._validate_soql_query(soql_query):
-                return None, "Invalid SOQL query. Must return Lead IDs only (e.g., SELECT Id FROM Lead, SELECT Lead.Id FROM Lead, or WHERE/LIMIT clauses). JOINs and UNIONs allowed if they return Lead IDs."
+            if not account_ids:
+                return {'valid_account_ids': [], 'invalid_account_ids': []}, "No Account IDs provided"
             
-            # Build the proper query using the new helper method
-            preview_query = self._build_soql_query(soql_query, limit)
+            # Clean and validate Account ID format first
+            cleaned_account_ids = []
+            format_invalid_ids = []
+            id_mapping = {}  # Maps original ID to cleaned ID for response
             
-            # Execute the SOQL query to get lead IDs only
-            assert self.sf is not None  # Type hint for linter
-            query_result = self.sf.query(preview_query)
+            for aid in account_ids:
+                aid_str = str(aid).strip()
+                # Basic Account ID format validation (15 or 18 characters, starts with 001)
+                if len(aid_str) in [15, 18] and aid_str.startswith('001'):
+                    # Convert 15-char IDs to 18-char for consistent querying
+                    if len(aid_str) == 15:
+                        converted_id = self._convert_15_to_18_char_id(aid_str)
+                        cleaned_account_ids.append(converted_id)
+                        id_mapping[converted_id] = aid_str  # Remember original format
+                    else:
+                        cleaned_account_ids.append(aid_str)
+                        id_mapping[aid_str] = aid_str
+                else:
+                    format_invalid_ids.append(aid_str)
             
-            execution_time = time.time() - start_time
+            # Query Salesforce to check which Account IDs exist (only for format-valid IDs)
+            valid_account_ids = []
+            sf_invalid_ids = []
             
-            # Extract just the Lead IDs
-            lead_ids = [record['Id'] for record in query_result['records']]
+            if cleaned_account_ids:
+                # Process in batches to avoid SOQL query limits
+                batch_size = 200  # Salesforce IN clause limit
+                for i in range(0, len(cleaned_account_ids), batch_size):
+                    batch = cleaned_account_ids[i:i + batch_size]
+                    ids_string = "', '".join(batch)
+                    validation_query = f"SELECT Id FROM Account WHERE Id IN ('{ids_string}')"
+                    
+                    assert self.sf is not None  # Type hint for linter
+                    result = self.sf.query(validation_query)
+                    
+                    # Extract valid Account IDs from this batch (in 18-char format from Salesforce)
+                    batch_valid_18char = [record['Id'] for record in result['records']]
+                    
+                    # Convert back to original format for response
+                    for valid_18char in batch_valid_18char:
+                        original_format = id_mapping.get(valid_18char, valid_18char)
+                        valid_account_ids.append(original_format)
+                    
+                    # Find invalid Account IDs in this batch (return in original format)
+                    for clean_id in batch:
+                        if clean_id not in batch_valid_18char:
+                            original_format = id_mapping.get(clean_id, clean_id)
+                            sf_invalid_ids.append(original_format)
             
-            result = {
-                'total_found': query_result['totalSize'],
-                'preview_count': len(lead_ids),
-                'lead_ids': lead_ids,
-                'query_info': {
-                    'original_query': soql_query,
-                    'preview_query': preview_query,
-                    'execution_time': f"{execution_time:.2f}s",
-                    'has_more': not query_result['done']
-                }
-            }
+            # Combine all invalid Account IDs (format issues + Salesforce not found)
+            all_invalid_ids = format_invalid_ids + sf_invalid_ids
             
-            return result, f"Found {query_result['totalSize']} total leads, showing first {len(lead_ids)}"
+            return {
+                'valid_account_ids': valid_account_ids,
+                'invalid_account_ids': all_invalid_ids,
+                'format_invalid_count': len(format_invalid_ids),
+                'sf_invalid_count': len(sf_invalid_ids)
+            }, f"Validated {len(valid_account_ids)} valid and {len(all_invalid_ids)} invalid Account IDs"
             
         except Exception as e:
-            return None, f"Error previewing SOQL query: {str(e)}"
+            return None, f"Error validating Account IDs: {str(e)}"
 
-    def analyze_leads_from_query(self, soql_query, max_analyze=100, include_ai_assessment=True):
-        """Analyze leads from a custom SOQL query with quality assessment and AI confidence scoring"""
+    def get_account_ids_from_query(self, soql_query, max_ids=100):
+        """Get Account IDs from a custom SOQL query that returns Account IDs only"""
         import time
         start_time = time.time()
         
@@ -303,374 +260,54 @@ class SalesforceService:
                 return None, "Failed to establish Salesforce connection"
             
             # Validate SOQL query
-            if not self._validate_soql_query(soql_query):
-                return None, "Invalid SOQL query. Must return Lead IDs only (e.g., SELECT Id FROM Lead, SELECT Lead.Id FROM Lead, or WHERE/LIMIT clauses). JOINs and UNIONs allowed if they return Lead IDs."
+            if not self._validate_account_soql_query(soql_query):
+                return None, "Invalid SOQL query. Must return Account IDs only (e.g., SELECT Id FROM Account, SELECT Account.Id FROM Account). Only complete SELECT queries are accepted."
             
-            # Execute the SOQL query to get lead IDs only (much faster than query_all)
+            # Execute the SOQL query to get account IDs only
             assert self.sf is not None  # Type hint for linter
             
-            # Build the proper query using the new helper method
-            final_query = self._build_soql_query(soql_query, max_analyze)
+            # Build the proper query with smart limit handling
+            try:
+                final_query = self._build_account_soql_query(soql_query, max_ids)
+            except ValueError as ve:
+                return None, str(ve)
+            
             id_result = self.sf.query(final_query)
-            lead_ids_to_analyze = [record['Id'] for record in id_result['records']]
-            actual_analyze_count = len(lead_ids_to_analyze)
-            
-            # If no leads found, return early
-            if actual_analyze_count == 0:
-                return {
-                    'summary': {
-                        'total_query_results': 0,
-                        'leads_analyzed': 0,
-                        'leads_with_issues': 0,
-                        'not_in_tam_count': 0,
-                        'suspicious_enrichment_count': 0,
-                        'avg_confidence_score': 0
-                    },
-                    'leads': [],
-                    'query_info': {
-                        'original_query': soql_query,
-                        'execution_time': f"{time.time() - start_time:.2f}s",
-                        'total_found': 0,
-                        'analyzed_count': 0
-                    }
-                }, "No leads found matching the query"
-            
-            # For total count, we can estimate or get it if needed
-            # For now, we'll use the actual count we got (could be less than total if limited)
-            total_found = id_result['totalSize'] if not id_result.get('done', True) else actual_analyze_count
-            
-            # Process leads with AI confidence assessment
-            analyzed_leads = []
-            leads_with_issues = 0
-            not_in_tam_count = 0
-            suspicious_enrichment_count = 0
-            total_confidence_score = 0
-            successful_ai_assessments = 0
-            
-            # Import here to avoid circular imports
-            from services.openai_service import generate_lead_confidence_assessment
-            
-            # Get all lead data in one batch query (much faster!)
-            batch_leads = self._analyze_lead_batch(lead_ids_to_analyze, include_details=True)
-            
-            # Process each lead for AI assessment
-            for lead_data in batch_leads:
-                try:
-                    # Count basic quality issues
-                    if lead_data.get('not_in_TAM') or lead_data.get('suspicious_enrichment'):
-                        leads_with_issues += 1
-                    if lead_data.get('not_in_TAM'):
-                        not_in_tam_count += 1
-                    if lead_data.get('suspicious_enrichment'):
-                        suspicious_enrichment_count += 1
-                    
-                    # Generate AI confidence assessment if requested
-                    if include_ai_assessment:
-                        assessment, ai_message = generate_lead_confidence_assessment(lead_data)
-                        if assessment and assessment.get('confidence_score') is not None:
-                            lead_data['confidence_assessment'] = assessment
-                            lead_data['ai_assessment_status'] = 'success'
-                            total_confidence_score += assessment.get('confidence_score', 0)
-                            successful_ai_assessments += 1
-                        else:
-                            lead_data['confidence_assessment'] = None
-                            lead_data['ai_assessment_status'] = f'failed: {ai_message}'
-                    
-                    # Always include full lead data
-                    analyzed_leads.append(lead_data)
-                        
-                except Exception as e:
-                    print(f"Error processing lead {lead_data.get('Id', 'unknown')}: {str(e)}")
-                    continue
+            account_ids = [record['Id'] for record in id_result['records']]
             
             execution_time = time.time() - start_time
-            avg_confidence_score = (total_confidence_score / successful_ai_assessments) if successful_ai_assessments > 0 else 0
+            total_found = id_result['totalSize'] if not id_result.get('done', True) else len(account_ids)
             
             result = {
-                'summary': {
-                    'total_query_results': total_found,
-                    'leads_analyzed': actual_analyze_count,
-                    'leads_with_issues': leads_with_issues,
-                    'not_in_tam_count': not_in_tam_count,
-                    'suspicious_enrichment_count': suspicious_enrichment_count,
-                    'issue_percentage': round((leads_with_issues / actual_analyze_count) * 100, 2) if actual_analyze_count > 0 else 0,
-                    'avg_confidence_score': round(avg_confidence_score, 1),
-                    'ai_assessments_successful': successful_ai_assessments,
-                    'ai_assessments_failed': actual_analyze_count - successful_ai_assessments
-                },
-                'leads': analyzed_leads,
+                'account_ids': account_ids,
                 'query_info': {
                     'original_query': soql_query,
                     'final_query': final_query,
                     'execution_time': f"{execution_time:.2f}s",
                     'total_found': total_found,
-                    'analyzed_count': actual_analyze_count,
-                    'skipped_count': total_found - actual_analyze_count,
-                    'include_ai_assessment': include_ai_assessment
+                    'returned_count': len(account_ids),
+                    'effective_limit': min(self._extract_limit_from_query(soql_query) or float('inf'), max_ids) if soql_query and soql_query.strip() else max_ids
                 }
             }
             
-            return result, f"Successfully analyzed {actual_analyze_count} of {total_found} leads from query with AI confidence scoring"
+            return result, f"Successfully retrieved {len(account_ids)} Account IDs from query"
             
         except Exception as e:
-            return None, f"Error analyzing leads from query: {str(e)}"
-    
-    def _validate_soql_query(self, soql_query):
-        """Validate SOQL query for safety - must return Lead IDs only"""
-        # Empty query is valid (will default to random leads)
-        if not soql_query or not soql_query.strip():
-            return True
-        
-        # Convert to uppercase for checking
-        query_upper = soql_query.upper().strip()
-        
-        # If it's not a full SELECT query, it's a WHERE/LIMIT clause - validate it
-        if not query_upper.startswith('SELECT'):
-            # Check for dangerous operations in WHERE/LIMIT clauses
-            dangerous_keywords = ['DELETE', 'UPDATE', 'INSERT', 'UPSERT', 'MERGE', 'DROP', 'ALTER', 'CREATE', 'TRUNCATE']
-            for keyword in dangerous_keywords:
-                if keyword in query_upper:
-                    return False
-            return True
-        
-        # For full SELECT queries, validate for security and Lead ID requirement
-        import re
-        
-        # Check for dangerous operations (most important security check)
-        dangerous_keywords = ['DELETE', 'UPDATE', 'INSERT', 'UPSERT', 'MERGE', 'DROP', 'ALTER', 'CREATE', 'TRUNCATE']
-        for keyword in dangerous_keywords:
-            if keyword in query_upper:
-                return False
-        
-        # Must be a SELECT query
-        if not query_upper.startswith('SELECT'):
-            return False
-        
-        # Extract the main SELECT clause (first occurrence)
-        select_match = re.search(r'SELECT\s+(.*?)\s+FROM', query_upper, re.DOTALL)
-        if not select_match:
-            return False
-        
-        select_fields = select_match.group(1).strip()
-        
-        # Check if selecting Lead.Id or just Id (both should be allowed)
-        # Remove whitespace and normalize
-        select_fields_clean = re.sub(r'\s+', '', select_fields)
-        
-        # Allow: "Id", "Lead.Id", "l.Id" (with alias), etc.
-        # The key is that it should end with ".ID" or be exactly "ID"
-        valid_id_patterns = [
-            r'^ID$',                    # Just "Id"
-            r'^LEAD\.ID$',             # "Lead.Id"  
-            r'^\w+\.ID$',              # "alias.Id" (like "l.Id")
-        ]
-        
-        is_valid_id_selection = any(re.match(pattern, select_fields_clean) for pattern in valid_id_patterns)
-        if not is_valid_id_selection:
-            return False
-        
-        # For the main FROM clause, we need to ensure it involves Lead object
-        # This is more flexible - allows JOINs as long as Lead is involved
-        if 'LEAD' not in query_upper:
-            return False
-        
-        # Additional validation: if there are UNIONs, each part should be validated
-        if 'UNION' in query_upper:
-            # Split by UNION and validate each part
-            union_parts = re.split(r'UNION\s+(?:ALL\s+)?', query_upper)
-            for part in union_parts:
-                part = part.strip()
-                if not part:
-                    continue
-                    
-                # Each UNION part should also select Lead IDs
-                part_select_match = re.search(r'SELECT\s+(.*?)\s+FROM', part, re.DOTALL)
-                if not part_select_match:
-                    return False
-                    
-                part_select_fields = part_select_match.group(1).strip()
-                part_select_clean = re.sub(r'\s+', '', part_select_fields)
-                
-                # Each UNION part should also be selecting ID
-                part_valid = any(re.match(pattern, part_select_clean) for pattern in valid_id_patterns)
-                if not part_valid:
-                    return False
-                
-                # Each UNION part should involve Lead object
-                if 'LEAD' not in part:
-                    return False
-        
-        return True
-    
-    def _build_soql_query(self, user_query, max_analyze):
-        """Build the final SOQL query handling empty queries and LIMIT clauses"""
-        # Handle empty query - return random leads
-        if not user_query or not user_query.strip():
-            return f"SELECT Id FROM Lead LIMIT {max_analyze}"
-        
-        user_query = user_query.strip()
-        
-        # If query doesn't start with SELECT, assume it's a WHERE/LIMIT clause
-        if not user_query.upper().startswith('SELECT'):
-            base_query = f"SELECT Id FROM Lead {user_query}"
-        else:
-            base_query = user_query
-        
-        # Check if LIMIT already exists
-        query_upper = base_query.upper()
-        if 'LIMIT' in query_upper:
-            # Extract existing LIMIT value
-            import re
-            limit_match = re.search(r'LIMIT\s+(\d+)', query_upper)
-            if limit_match:
-                existing_limit = int(limit_match.group(1))
-                # Use the smaller of the two limits
-                effective_limit = min(existing_limit, max_analyze)
-                # Replace the existing LIMIT with the effective limit
-                base_query = re.sub(r'LIMIT\s+\d+', f'LIMIT {effective_limit}', base_query, flags=re.IGNORECASE)
-            return base_query
-        else:
-            # No existing LIMIT, add our own
-            return f"{base_query} LIMIT {max_analyze}"
-    
-    def _analyze_lead_batch(self, lead_ids, include_details=True):
-        """Analyze a batch of leads by their IDs"""
-        try:
-            # Convert all Lead IDs to 18-character format for querying
-            query_lead_ids = []
-            for lid in lead_ids:
-                if len(str(lid).strip()) == 15:
-                    query_lead_ids.append(self._convert_15_to_18_char_id(str(lid).strip()))
-                else:
-                    query_lead_ids.append(str(lid).strip())
-            
-            # Build batch query for all lead IDs
-            ids_string = "', '".join(query_lead_ids)
-            batch_query = f"""
-            SELECT Id, Email, First_Channel__c, 
-                   SegmentName__r.Name, LS_Company_Size_Range__c, Website, Company,
-                   ZI_Website__c, ZI_Company_Name__c, ZI_Employees__c
-            FROM Lead 
-            WHERE Id IN ('{ids_string}')
-            """
-            
-            assert self.sf is not None  # Type hint for linter
-            result = self.sf.query(batch_query)
-            
-            analyzed_leads = []
-            for record in result['records']:
-                # Normalize the lead record (handle relationship fields and cleanup)
-                record = self._normalize_lead_record(record)
-                
-                # Add business logic flags
-                flags = self._analyze_lead_flags(record)
-                
-                if include_details:
-                    # Include all lead data
-                    record.update(flags)
-                    analyzed_leads.append(record)
-                else:
-                    # Include only ID and flags
-                    analyzed_leads.append({
-                        'Id': record['Id'],
-                        'not_in_TAM': flags['not_in_TAM'],
-                        'suspicious_enrichment': flags['suspicious_enrichment']
-                    })
-            
-            return analyzed_leads
-            
-        except Exception as e:
-            # Return empty results for this batch on error
-            print(f"Error analyzing batch: {str(e)}")
-            return []
-    
-    def validate_lead_ids(self, lead_ids):
-        """Validate that all provided Lead IDs exist in Salesforce"""
-        try:
-            if not self.ensure_connection():
-                return None, "Failed to establish Salesforce connection"
-            
-            if not lead_ids:
-                return {'valid_lead_ids': [], 'invalid_lead_ids': []}, "No Lead IDs provided"
-            
+            error_msg = str(e)
+            # Provide cleaner error messages for common SOQL issues
+            if "malformed request" in error_msg.lower() or "malformed_query" in error_msg.lower():
+                return None, "Invalid SOQL syntax. Please check your query and try again. Make sure it follows proper SOQL format."
+            elif "unexpected token" in error_msg.lower():
+                return None, "SOQL syntax error. Please check for typos, missing keywords, or incorrect field names in your query."
+            elif "no such column" in error_msg.lower() or "invalid field" in error_msg.lower():
+                return None, "Invalid field name in query. Please check that all field names exist in the Account object."
+            elif "invalid object name" in error_msg.lower():
+                return None, "Invalid object name in query. This API only supports queries on the Account object."
+            else:
+                return None, f"Error executing SOQL query: Please check your query syntax and try again."
 
-            
-            # Clean and validate Lead ID format first
-            cleaned_lead_ids = []
-            format_invalid_ids = []
-            id_mapping = {}  # Maps original ID to cleaned ID for response
-            
-            for lid in lead_ids:
-                lid_str = str(lid).strip()
-                # Basic Lead ID format validation (15 or 18 characters, starts with 00Q)
-                if len(lid_str) in [15, 18] and lid_str.startswith('00Q'):
-                    # Convert 15-char IDs to 18-char for consistent querying
-                    if len(lid_str) == 15:
-                        converted_id = self._convert_15_to_18_char_id(lid_str)
-                        cleaned_lead_ids.append(converted_id)
-                        id_mapping[converted_id] = lid_str  # Remember original format
-                    else:
-                        cleaned_lead_ids.append(lid_str)
-                        id_mapping[lid_str] = lid_str
-                else:
-                    format_invalid_ids.append(lid_str)
-            
-            # If any Lead IDs have invalid format, return them as invalid
-            if format_invalid_ids:
-                print(f"🔍 Found {len(format_invalid_ids)} Lead IDs with invalid format: {format_invalid_ids}")
-            
-            # Query Salesforce to check which Lead IDs exist (only for format-valid IDs)
-            valid_lead_ids = []
-            sf_invalid_ids = []
-            
-            if cleaned_lead_ids:
-                # Process in batches to avoid SOQL query limits
-                batch_size = 200  # Salesforce IN clause limit
-                for i in range(0, len(cleaned_lead_ids), batch_size):
-                    batch = cleaned_lead_ids[i:i + batch_size]
-                    ids_string = "', '".join(batch)
-                    validation_query = f"SELECT Id FROM Lead WHERE Id IN ('{ids_string}')"
-                    
-                    assert self.sf is not None  # Type hint for linter
-                    result = self.sf.query(validation_query)
-                    
-                    # Extract valid Lead IDs from this batch (in 18-char format from Salesforce)
-                    batch_valid_18char = [record['Id'] for record in result['records']]
-                    
-                    # Convert back to original format for response
-                    for valid_18char in batch_valid_18char:
-                        original_format = id_mapping.get(valid_18char, valid_18char)
-                        valid_lead_ids.append(original_format)
-                    
-                    # Find invalid Lead IDs in this batch (return in original format)
-                    for clean_id in batch:
-                        if clean_id not in batch_valid_18char:
-                            original_format = id_mapping.get(clean_id, clean_id)
-                            sf_invalid_ids.append(original_format)
-            
-            # Combine all invalid Lead IDs (format issues + Salesforce not found)
-            all_invalid_ids = format_invalid_ids + sf_invalid_ids
-            
-            print(f"🔍 Lead ID validation results:")
-            print(f"   - Total provided: {len(lead_ids)}")
-            print(f"   - Format valid: {len(cleaned_lead_ids)}")
-            print(f"   - Format invalid: {len(format_invalid_ids)}")
-            print(f"   - Salesforce valid: {len(valid_lead_ids)}")
-            print(f"   - Salesforce invalid: {len(sf_invalid_ids)}")
-            print(f"   - 15-char conversions: {len([k for k, v in id_mapping.items() if len(v) == 15])}")
-            
-            return {
-                'valid_lead_ids': valid_lead_ids,
-                'invalid_lead_ids': all_invalid_ids,
-                'format_invalid_count': len(format_invalid_ids),
-                'sf_invalid_count': len(sf_invalid_ids)
-            }, f"Validated {len(valid_lead_ids)} valid and {len(all_invalid_ids)} invalid Lead IDs"
-            
-        except Exception as e:
-            return None, f"Error validating Lead IDs: {str(e)}"
-    
-    def analyze_leads_from_ids(self, lead_ids, include_ai_assessment=True):
-        """Analyze leads from a list of Lead IDs with quality assessment and AI confidence scoring"""
+    def get_accounts_data_by_ids(self, account_ids):
+        """Get full Account data for a list of Account IDs"""
         import time
         start_time = time.time()
         
@@ -678,82 +315,218 @@ class SalesforceService:
             if not self.ensure_connection():
                 return None, "Failed to establish Salesforce connection"
             
-            if not lead_ids:
-                return {
-                    'summary': {
-                        'leads_analyzed': 0,
-                        'leads_with_issues': 0,
-                        'not_in_tam_count': 0,
-                        'suspicious_enrichment_count': 0,
-                        'avg_confidence_score': 0
-                    },
-                    'leads': []
-                }, "No Lead IDs provided"
+            if not account_ids:
+                return {'accounts': []}, "No Account IDs provided"
             
-            actual_analyze_count = len(lead_ids)
-            
-            # Process leads with AI confidence assessment
-            analyzed_leads = []
-            leads_with_issues = 0
-            not_in_tam_count = 0
-            suspicious_enrichment_count = 0
-            total_confidence_score = 0
-            successful_ai_assessments = 0
-            
-            # Import here to avoid circular imports
-            from services.openai_service import generate_lead_confidence_assessment
-            
-            # Get all lead data in one batch query (much faster!)
-            batch_leads = self._analyze_lead_batch(lead_ids, include_details=True)
-            
-            # Process each lead for AI assessment
-            for lead_data in batch_leads:
-                try:
-                    # Count basic quality issues
-                    if lead_data.get('not_in_TAM') or lead_data.get('suspicious_enrichment'):
-                        leads_with_issues += 1
-                    if lead_data.get('not_in_TAM'):
-                        not_in_tam_count += 1
-                    if lead_data.get('suspicious_enrichment'):
-                        suspicious_enrichment_count += 1
-                    
-                    # Generate AI confidence assessment if requested
-                    if include_ai_assessment:
-                        assessment, ai_message = generate_lead_confidence_assessment(lead_data)
-                        if assessment and assessment.get('confidence_score') is not None:
-                            lead_data['confidence_assessment'] = assessment
-                            lead_data['ai_assessment_status'] = 'success'
-                            total_confidence_score += assessment.get('confidence_score', 0)
-                            successful_ai_assessments += 1
-                        else:
-                            lead_data['confidence_assessment'] = None
-                            lead_data['ai_assessment_status'] = f'failed: {ai_message}'
-                    
-                    # Always include full lead data
-                    analyzed_leads.append(lead_data)
-                        
-                except Exception as e:
-                    print(f"Error processing lead {lead_data.get('Id', 'unknown')}: {str(e)}")
-                    continue
+            # Get account data in batch
+            analyzed_accounts = self._analyze_account_batch(account_ids)
             
             execution_time = time.time() - start_time
-            avg_confidence_score = (total_confidence_score / successful_ai_assessments) if successful_ai_assessments > 0 else 0
+            
+            result = {
+                'accounts': analyzed_accounts,
+                'summary': {
+                    'total_requested': len(account_ids),
+                    'accounts_retrieved': len(analyzed_accounts)
+                },
+                'execution_time': f"{execution_time:.2f}s"
+            }
+            
+            return result, f"Successfully retrieved data for {len(analyzed_accounts)} of {len(account_ids)} accounts"
+            
+        except Exception as e:
+            return None, f"Error retrieving Account data: {str(e)}"
+
+    def analyze_accounts_from_query(self, soql_query, max_analyze=100):
+        """Analyze accounts from a custom SOQL query that returns Account IDs only"""
+        import time
+        start_time = time.time()
+        
+        try:
+            if not self.ensure_connection():
+                return None, "Failed to establish Salesforce connection"
+            
+            # Validate SOQL query
+            if not self._validate_account_soql_query(soql_query):
+                return None, "Invalid SOQL query. Must return Account IDs only (e.g., SELECT Id FROM Account, SELECT Account.Id FROM Account). Only complete SELECT queries are accepted."
+            
+            # Execute the SOQL query to get account IDs only
+            assert self.sf is not None  # Type hint for linter
+            
+            # Build the proper query with smart limit handling
+            try:
+                final_query = self._build_account_soql_query(soql_query, max_analyze)
+            except ValueError as ve:
+                return None, str(ve)
+            
+            id_result = self.sf.query(final_query)
+            account_ids_to_analyze = [record['Id'] for record in id_result['records']]
+            actual_analyze_count = len(account_ids_to_analyze)
+            
+            # If no accounts found, return early
+            if actual_analyze_count == 0:
+                return {
+                    'summary': {
+                        'total_query_results': 0,
+                        'accounts_analyzed': 0
+                    },
+                    'accounts': [],
+                    'query_info': {
+                        'original_query': soql_query,
+                        'execution_time': f"{time.time() - start_time:.2f}s",
+                        'total_found': 0,
+                        'analyzed_count': 0
+                    }
+                }, "No accounts found matching the query"
+            
+            # For total count
+            total_found = id_result['totalSize'] if not id_result.get('done', True) else actual_analyze_count
+            
+            # Get account data in batch
+            analyzed_accounts = self._analyze_account_batch(account_ids_to_analyze)
+            
+            execution_time = time.time() - start_time
             
             result = {
                 'summary': {
-                    'leads_analyzed': actual_analyze_count,
-                    'leads_with_issues': leads_with_issues,
-                    'not_in_tam_count': not_in_tam_count,
-                    'suspicious_enrichment_count': suspicious_enrichment_count,
-                    'issue_percentage': round((leads_with_issues / actual_analyze_count) * 100, 2) if actual_analyze_count > 0 else 0,
-                    'avg_confidence_score': round(avg_confidence_score, 1),
-                    'ai_assessments_successful': successful_ai_assessments,
-                    'ai_assessments_failed': actual_analyze_count - successful_ai_assessments
+                    'total_query_results': total_found,
+                    'accounts_analyzed': actual_analyze_count
                 },
-                'leads': analyzed_leads
+                'accounts': analyzed_accounts,
+                'query_info': {
+                    'original_query': soql_query,
+                    'final_query': final_query,
+                    'execution_time': f"{execution_time:.2f}s",
+                    'total_found': total_found,
+                    'analyzed_count': actual_analyze_count,
+                    'effective_limit': min(self._extract_limit_from_query(soql_query) or float('inf'), max_analyze) if soql_query and soql_query.strip() else max_analyze
+                }
             }
             
-            return result, f"Successfully analyzed {actual_analyze_count} leads with AI confidence scoring"
+            return result, f"Successfully analyzed {actual_analyze_count} accounts from query"
             
         except Exception as e:
-            return None, f"Error analyzing leads from IDs: {str(e)}" 
+            return None, f"Error analyzing accounts from query: {str(e)}"
+
+    def _validate_account_soql_query(self, soql_query):
+        """Validate SOQL query for safety - must be complete SELECT query returning Account IDs only"""
+        # Empty query is no longer valid - require complete SELECT statement
+        if not soql_query or not soql_query.strip():
+            return False
+        
+        # Convert to uppercase for checking
+        query_upper = soql_query.upper().strip()
+        
+        # Must be a complete SELECT query, not a WHERE/LIMIT clause
+        if not query_upper.startswith('SELECT'):
+            return False
+        
+        # For full SELECT queries, validate for security and Account ID requirement
+        import re
+        
+        # Check for dangerous operations
+        dangerous_keywords = ['DELETE', 'UPDATE', 'INSERT', 'UPSERT', 'MERGE', 'DROP', 'ALTER', 'CREATE', 'TRUNCATE']
+        for keyword in dangerous_keywords:
+            if keyword in query_upper:
+                return False
+        
+        # Extract the main SELECT clause
+        select_match = re.search(r'SELECT\s+(.*?)\s+FROM', query_upper, re.DOTALL)
+        if not select_match:
+            return False
+        
+        select_fields = select_match.group(1).strip()
+        select_fields_clean = re.sub(r'\s+', '', select_fields)
+        
+        # Allow: "Id", "Account.Id", "a.Id" (with alias), etc.
+        valid_id_patterns = [
+            r'^ID$',                    # Just "Id"
+            r'^ACCOUNT\.ID$',           # "Account.Id"  
+            r'^\w+\.ID$',              # "alias.Id" (like "a.Id")
+        ]
+        
+        is_valid_id_selection = any(re.match(pattern, select_fields_clean) for pattern in valid_id_patterns)
+        if not is_valid_id_selection:
+            return False
+        
+        # For the main FROM clause, ensure it involves Account object
+        if 'ACCOUNT' not in query_upper:
+            return False
+        
+        return True
+
+    def _build_account_soql_query(self, user_query, max_limit):
+        """Build the final SOQL query for accounts with smart limit handling"""
+        # No longer handle empty queries - require full SELECT query
+        if not user_query or not user_query.strip():
+            raise ValueError("Empty query not allowed. Please provide a complete SOQL SELECT query.")
+        
+        user_query = user_query.strip()
+        
+        # Only accept full SELECT queries, not WHERE/LIMIT clauses
+        if not user_query.upper().startswith('SELECT'):
+            raise ValueError("Query must be a complete SELECT statement. WHERE/LIMIT clauses alone are not accepted.")
+        
+        # For full SELECT queries, handle LIMIT clause intelligently
+        query_upper = user_query.upper()
+        if 'LIMIT' in query_upper:
+            # Extract existing LIMIT value and use the smaller of the two
+            import re
+            limit_match = re.search(r'LIMIT\s+(\d+)', query_upper)
+            if limit_match:
+                existing_limit = int(limit_match.group(1))
+                effective_limit = min(existing_limit, max_limit)
+                # Replace the existing LIMIT with the effective limit
+                final_query = re.sub(r'LIMIT\s+\d+', f'LIMIT {effective_limit}', user_query, flags=re.IGNORECASE)
+                return final_query
+            return user_query
+        else:
+            # No existing LIMIT, add our own
+            return f"{user_query} LIMIT {max_limit}"
+
+    def _extract_limit_from_query(self, query):
+        """Extract the LIMIT value from a SOQL query, returns None if no LIMIT found"""
+        if not query:
+            return None
+        
+        import re
+        limit_match = re.search(r'LIMIT\s+(\d+)', query.upper())
+        return int(limit_match.group(1)) if limit_match else None
+
+    def _analyze_account_batch(self, account_ids):
+        """Analyze a batch of accounts by their IDs"""
+        try:
+            # Convert all Account IDs to 18-character format for querying
+            query_account_ids = []
+            for aid in account_ids:
+                if len(str(aid).strip()) == 15:
+                    query_account_ids.append(self._convert_15_to_18_char_id(str(aid).strip()))
+                else:
+                    query_account_ids.append(str(aid).strip())
+            
+            # Build batch query for all account IDs including custom fields
+            ids_string = "', '".join(query_account_ids)
+            batch_query = f"""
+            SELECT Id, Name, Ultimate_Parent_Account_Name__c, Website, 
+                   BillingStreet, BillingCity, BillingState, BillingCountry,
+                   ZI_Company_Name__c, ZI_Website__c, Parent_Account_ID__c
+            FROM Account 
+            WHERE Id IN ('{ids_string}')
+            """
+            
+            assert self.sf is not None  # Type hint for linter
+            result = self.sf.query(batch_query)
+            
+            analyzed_accounts = []
+            for record in result['records']:
+                # Remove Salesforce metadata if present
+                if 'attributes' in record:
+                    del record['attributes']
+                analyzed_accounts.append(record)
+            
+            return analyzed_accounts
+            
+        except Exception as e:
+            # Return empty results for this batch on error
+            print(f"Error analyzing account batch: {str(e)}")
+            return [] 

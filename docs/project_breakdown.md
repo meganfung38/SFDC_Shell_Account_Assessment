@@ -40,21 +40,17 @@
 1. Salesforce Data Extraction  
 * Shell and Customer Account data: 
 
-| Field  | API Name |
-| :---- | :---- |
-| *Id* | id |
-| *Account Name*  | Name |
-| *Ultimate Parent Account Name (shell account company/ organization)* | Ultimate\_Parent\_Account\_Name\_\_c |
-| *Website*  | Website |
-| *Billing Address*  | BillingStreet, BillingCity, BillingState, BillingCountry |
-| *ZI Company Name*  | ZI\_Company\_Name\_\_c |
-| *ZI Website* | ZI\_Website\_\_c  |
-
-* Additional Customer Account data: 
-
-| Field | API Name |
-| :---- | :---- |
-| *Parent Account ID* | Parent\_Account\_ID\_\_c |
+| Field  | Description | API Name |
+| :---- | :---- | :---- |
+| *Id*  | 18 Character SFDC Id | id |
+| *Account Name*  | Company/ Organization/ Personal Name | Name |
+| *Ultimate Parent Account Name*  | Shell Account Company/ Organization | Ultimate\_Parent\_Account\_Name\_\_c |
+| *Website*  | Associated Website | Website |
+| *Billing Address*  | Location  | BillingStreet, BillingCity, BillingState, BillingCountry |
+| *ZI Company Name*  | ZoomInfo Enriched Company Name | ZI\_Company\_Name\_\_c |
+| *ZI Website* | ZoomInfo Enriched Company Name | ZI\_Website\_\_c  |
+| *Parent Account ID*  | 15 Character SFDC Id | Parent\_Account\_ID\_\_c |
+| *Record Type*  | Customer Account or ZI Customer Shell Account | RecordTypeId.Name  |
 
 * Flags: 
 

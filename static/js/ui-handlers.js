@@ -208,6 +208,7 @@ async function handleGetAccountData(e) {
             
             accounts.forEach((account, index) => {
                 output += `${index + 1}. Account: ${account.Name} (${account.Id})\n`;
+                output += `   Record Type: ${account.RecordType?.Name || 'N/A'}\n`;
                 output += `   Website: ${account.Website || 'N/A'}\n`;
                 output += `   Ultimate Parent: ${account.Ultimate_Parent_Account_Name__c || 'N/A'}\n`;
                 output += `   Billing Address: ${formatBillingAddress(account)}\n`;
@@ -277,6 +278,7 @@ async function handleAccountFormSubmit(e) {
             output += `Account Details:\n${'='.repeat(50)}\n\n`;
             output += `ID: ${account.Id}\n`;
             output += `Name: ${account.Name}\n`;
+            output += `Record Type: ${account.RecordType?.Name || 'N/A'}\n`;
             output += `Ultimate Parent: ${account.Ultimate_Parent_Account_Name__c || 'N/A'}\n`;
             output += `Website: ${account.Website || 'N/A'}\n`;
             output += `Billing Address: ${formatBillingAddress(account)}\n`;
@@ -508,6 +510,7 @@ async function handleValidateAccountIds(e) {
             
             accounts.forEach((account, index) => {
                 output += `${index + 1}. Account: ${account.Name} (${account.Id})\n`;
+                output += `   Record Type: ${account.RecordType?.Name || 'N/A'}\n`;
                 output += `   Website: ${account.Website || 'N/A'}\n`;
                 output += `   Ultimate Parent: ${account.Ultimate_Parent_Account_Name__c || 'N/A'}\n`;
                 output += `   Billing Address: ${formatBillingAddress(account)}\n`;

@@ -105,11 +105,11 @@ class SalesforceService:
             if not account_id.startswith('001'):
                 return None, f"Invalid Account ID format. Account IDs must start with '001'. Provided: '{account_id}'"
             
-            # Query for Account fields including custom fields
+            # Query for Account fields including custom fields and RecordType
             query = """
             SELECT Id, Name, Ultimate_Parent_Account_Name__c, Website, 
                    BillingStreet, BillingCity, BillingState, BillingCountry,
-                   ZI_Company_Name__c, ZI_Website__c, Parent_Account_ID__c
+                   ZI_Company_Name__c, ZI_Website__c, Parent_Account_ID__c, RecordType.Name
             FROM Account 
             WHERE Id = '{}'
             """.format(account_id)
@@ -145,11 +145,11 @@ class SalesforceService:
             if not self.ensure_connection():
                 return None, "Failed to establish Salesforce connection"
             
-            # Base query with Account fields including custom fields
+            # Base query with Account fields including custom fields and RecordType
             base_query = """
             SELECT Id, Name, Ultimate_Parent_Account_Name__c, Website, 
                    BillingStreet, BillingCity, BillingState, BillingCountry,
-                   ZI_Company_Name__c, ZI_Website__c, Parent_Account_ID__c
+                   ZI_Company_Name__c, ZI_Website__c, Parent_Account_ID__c, RecordType.Name
             FROM Account
             """
             
@@ -504,12 +504,12 @@ class SalesforceService:
                 else:
                     query_account_ids.append(str(aid).strip())
             
-            # Build batch query for all account IDs including custom fields
+            # Build batch query for all account IDs including custom fields and RecordType
             ids_string = "', '".join(query_account_ids)
             batch_query = f"""
             SELECT Id, Name, Ultimate_Parent_Account_Name__c, Website, 
                    BillingStreet, BillingCity, BillingState, BillingCountry,
-                   ZI_Company_Name__c, ZI_Website__c, Parent_Account_ID__c
+                   ZI_Company_Name__c, ZI_Website__c, Parent_Account_ID__c, RecordType.Name
             FROM Account 
             WHERE Id IN ('{ids_string}')
             """

@@ -51,3 +51,12 @@ logs/
 # Database
 *.db
 *.sqlite3 .env
+
+# Data files - NEVER commit sensitive data!
+*.xlsx
+*.xls
+*.csv
+ml_account_matching/Sample*
+ml_account_matching/data/
+ml_account_matching/*.xlsx
+ml_account_matching/*.xls

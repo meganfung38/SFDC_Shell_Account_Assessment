@@ -1,28 +1,16 @@
 // Global variables to store analysis results for export
-let previewData = null;
 let analysisResults = null;
 let singleAccountResults = null;
+let excelValidationResults = null;
+let excelOriginalData = null;
+let excelInfo = null;
 
 // Global variables for Excel upload functionality
 let excelFileData = null;
 let excelPreviewData = null;
 let excelAnalysisResults = null;
 
-// Global variables for Excel workflow
-let excelValidationResults = null;
 
-// Export functions (placeholder implementations)
-function handleExportToExcel() {
-    alert('Export functionality coming soon!');
-}
-
-function handleExportAccountToExcel() {
-    alert('Export functionality coming soon!');
-}
-
-function handleExportExcelToExcel() {
-    alert('Export functionality coming soon!');
-}
 
 // Initialize event handlers when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
@@ -66,23 +54,6 @@ document.addEventListener('DOMContentLoaded', function() {
             excelConfig.style.display = 'none';
         }
     });
-});
-
-function initializeEventHandlers() {
-    // SOQL Query Form Handler (Get Account IDs)
-    document.getElementById('queryForm').addEventListener('submit', handleQueryFormSubmit);
-    
-    // Get Account Data Button Handler (inline button)
-    document.getElementById('getAccountDataBtn').addEventListener('click', handleGetAccountData);
-    
-    // Export Button Handler for Analyze Query
-    document.getElementById('exportBtn').addEventListener('click', handleExportAnalysis);
-    
-    // Account Form Handler
-    document.getElementById('accountForm').addEventListener('submit', handleAccountFormSubmit);
-    
-    // Export Button Handler for Account
-    document.getElementById('exportAccountBtn').addEventListener('click', handleExportAccount);
     
     // Clear stored results when inputs change
     document.getElementById('accountId').addEventListener('input', function() {
@@ -103,13 +74,9 @@ function initializeEventHandlers() {
         document.getElementById('getAccountDataBtn').disabled = true;
         document.getElementById('exportBtn').disabled = true;
     });
-    
-    // Excel upload event handlers
-    document.getElementById('excelFile').addEventListener('change', handleExcelFileChange);
-    document.getElementById('parseExcelBtn').addEventListener('click', handleParseExcel);
-    document.getElementById('validateAccountIdsBtn').addEventListener('click', handleValidateAccountIds);
-    document.getElementById('exportExcelBtn').addEventListener('click', handleExportExcel);
-}
+});
+
+
 
 async function handleQueryFormSubmit(e) {
     e.preventDefault();
@@ -121,11 +88,12 @@ async function handleQueryFormSubmit(e) {
     
     // Get form values
     const soqlQuery = document.getElementById('soqlQuery').value.trim();
-    const maxAnalyze = parseInt(document.getElementById('maxAnalyze').value);
+    const maxAnalyzeInput = document.getElementById('maxAnalyze').value.trim();
+    const maxAnalyze = maxAnalyzeInput === '' ? '' : parseInt(maxAnalyzeInput);
     
     // Validate inputs
-    if (isNaN(maxAnalyze) || maxAnalyze < 1 || maxAnalyze > 500) {
-        responseDiv.innerHTML = '<pre class="error">❌ Error: Max accounts to analyze must be a number between 1 and 500.</pre>';
+    if (maxAnalyze !== '' && (isNaN(maxAnalyze) || maxAnalyze < 1 || maxAnalyze > 500)) {
+        responseDiv.innerHTML = '<pre class="error">❌ Error: Max accounts to analyze must be a number between 1 and 500, or leave blank for all results.</pre>';
         responseDiv.className = 'response error';
         responseDiv.style.display = 'block';
         getDataBtn.disabled = true;
@@ -167,7 +135,7 @@ async function handleQueryFormSubmit(e) {
             },
             body: JSON.stringify({
                 soql_query: soqlQuery,
-                max_ids: maxAnalyze
+                max_ids: maxAnalyze === '' ? '' : parseInt(maxAnalyze)
             })
         });
         
@@ -247,16 +215,22 @@ async function handleGetAccountData(e) {
         
         const data = await response.json();
         
-        if (response.ok) {
+        if (response.ok && data.status === 'success' && data.data && data.data.accounts) {
             const accounts = data.data.accounts;
             const summary = data.data.summary;
+            
+            // Store results for export
+            analysisResults = {
+                accounts: accounts,
+                summary: summary
+            };
             
             let output = `✅ Account Analysis Complete!\n\n`;
             
             // Summary Section
             output += `<details>
 <summary>📊 Summary</summary>
-- Accounts requested: ${summary.total_requested}
+- Total accounts requested: ${summary.total_requested}
 - Accounts retrieved: ${summary.accounts_retrieved}
 - Execution time: ${data.data.execution_time}
 </details>
@@ -276,18 +250,19 @@ async function handleGetAccountData(e) {
             responseDiv.innerHTML = `<pre>${output}</pre>`;
             responseDiv.className = 'response success';
             
-            // Update stored results for future export
-            analysisResults.data.accounts = accounts;
+            // Enable export button
+            exportBtn.disabled = false;
         } else {
-            responseDiv.innerHTML = `<pre class="error">❌ Error getting account data: ${data.message}</pre>`;
+            const errorMsg = data.message || 'Failed to analyze accounts';
+            responseDiv.innerHTML = `<pre class="error">❌ Error: ${errorMsg}</pre>`;
             responseDiv.className = 'response error';
+            exportBtn.disabled = true;
         }
-        
     } catch (error) {
         responseDiv.innerHTML = `<pre class="error">❌ Network Error: ${error.message}</pre>`;
         responseDiv.className = 'response error';
+        exportBtn.disabled = true;
     } finally {
-        // Restore button state
         button.disabled = false;
         button.textContent = 'Analyze Accounts';
     }
@@ -295,54 +270,40 @@ async function handleGetAccountData(e) {
 
 async function handleAccountFormSubmit(e) {
     e.preventDefault();
+    
     const accountId = document.getElementById('accountId').value.trim();
     const responseDiv = document.getElementById('accountResponse');
-    const button = e.target.querySelector('button');
+    const exportBtn = document.getElementById('exportAccountBtn');
     
     if (!accountId) {
         responseDiv.innerHTML = '<pre class="error">❌ Please enter an Account ID</pre>';
+        responseDiv.className = 'response error';
         responseDiv.style.display = 'block';
         return;
     }
     
     try {
-        button.disabled = true;
-        button.textContent = 'Analyzing...';
+        // Show loading state
+        exportBtn.disabled = true;
         responseDiv.innerHTML = 'Analyzing account...';
-        responseDiv.style.display = 'block';
         responseDiv.className = 'response loading';
+        responseDiv.style.display = 'block';
         
         const response = await fetch(`/account/${accountId}`, {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-            }
+            method: 'GET'
         });
         
         const data = await response.json();
-        console.log('Response data:', data); // Debug log
         
         if (response.ok && data.status === 'success' && data.data && data.data.accounts && data.data.accounts.length > 0) {
             const account = data.data.accounts[0];
-            console.log('Account data:', account); // Debug log
             
-            if (!account || !account.Id) {
-                throw new Error('Invalid account data received from server');
-            }
+            // Store results for export
+            singleAccountResults = {
+                account: account
+            };
             
             let output = `✅ Account Analysis Complete!\n\n`;
-            
-            // Summary Section
-            output += `<details>
-<summary>📊 Summary</summary>
-- Account analyzed: ${accountId}
-- Execution time: ${data.data.execution_time}
-</details>
-
-`;
-            
-            // Account Analysis Section
-            output += `Account Analysis:\n==================================================\n\n`;
             
             // Add bold account header
             output += `<strong>${account.Name} (${account.Id})</strong>\n\n`;
@@ -351,19 +312,19 @@ async function handleAccountFormSubmit(e) {
             
             responseDiv.innerHTML = `<pre>${output}</pre>`;
             responseDiv.className = 'response success';
+            
+            // Enable export button
+            exportBtn.disabled = false;
         } else {
-            const errorMsg = data.message || 'Failed to retrieve account data';
+            const errorMsg = data.message || 'Failed to retrieve account';
             responseDiv.innerHTML = `<pre class="error">❌ Error: ${errorMsg}</pre>`;
             responseDiv.className = 'response error';
+            exportBtn.disabled = true;
         }
     } catch (error) {
-        console.error('Error details:', error);
-        console.error('Full error object:', error);
         responseDiv.innerHTML = `<pre class="error">❌ Network Error: ${error.message}</pre>`;
         responseDiv.className = 'response error';
-    } finally {
-        button.disabled = false;
-        button.textContent = 'Analyze Account';
+        exportBtn.disabled = true;
     }
 }
 
@@ -433,21 +394,7 @@ Shell ZI Company: ${account.Shell_Account_Data.ZI_Company_Name__c || 'N/A'}
     return output;
 }
 
-// Placeholder functions for export functionality
-async function handleExportAnalysis(e) {
-    e.preventDefault();
-    alert('Export functionality to be implemented');
-}
 
-async function handleExportAccount(e) {
-    e.preventDefault();
-    alert('Export functionality to be implemented');
-}
-
-async function handleExportExcel(e) {
-    e.preventDefault();
-    alert('Export functionality to be implemented');
-}
 
 // Excel handling functions
 async function handleExcelFileChange(e) {
@@ -601,6 +548,8 @@ async function handleValidateAccountIds() {
         
         if (response.ok && data.status === 'success') {
             excelValidationResults = data.data;
+            excelOriginalData = data.data.original_excel_data;  // Store original Excel data for export
+            excelInfo = data.data.excel_info;  // Store Excel info for export
             
             let output = `✅ Account IDs Validated Successfully!\n\n`;
             
@@ -845,6 +794,7 @@ async function handleExcelSubmit(e) {
 async function handleAnalyzeExcelAccounts() {
     const responseDiv = document.getElementById('excelResponse');
     const button = document.getElementById('analyzeExcelBtn');
+    const exportBtn = document.getElementById('exportExcelBtn');
     
     if (!excelValidationResults || !excelValidationResults.accounts) {
         responseDiv.innerHTML = '<pre class="error">❌ No validated accounts found. Please validate Account IDs first.</pre>';
@@ -853,6 +803,7 @@ async function handleAnalyzeExcelAccounts() {
     
     try {
         button.disabled = true;
+        exportBtn.disabled = true;
         button.textContent = 'Analyzing...';
         responseDiv.innerHTML = 'Analyzing accounts...';
         responseDiv.className = 'response loading';
@@ -875,6 +826,12 @@ async function handleAnalyzeExcelAccounts() {
         if (response.ok && data.status === 'success' && data.data && data.data.accounts) {
             const accounts = data.data.accounts;
             const summary = data.data.summary;
+            
+            // Store results for export
+            excelValidationResults.analysisResults = {
+                accounts: accounts,
+                summary: summary
+            };
             
             let output = `✅ Account Analysis Complete!\n\n`;
             
@@ -901,16 +858,142 @@ async function handleAnalyzeExcelAccounts() {
             
             responseDiv.innerHTML = `<pre>${output}</pre>`;
             responseDiv.className = 'response success';
+            
+            // Enable export button
+            exportBtn.disabled = false;
         } else {
             const errorMsg = data.message || 'Failed to analyze accounts';
             responseDiv.innerHTML = `<pre class="error">❌ Error: ${errorMsg}</pre>`;
             responseDiv.className = 'response error';
+            exportBtn.disabled = true;
         }
     } catch (error) {
         responseDiv.innerHTML = `<pre class="error">❌ Network Error: ${error.message}</pre>`;
         responseDiv.className = 'response error';
+        exportBtn.disabled = true;
     } finally {
         button.disabled = false;
         button.textContent = 'Analyze Accounts';
+    }
+}
+
+// Export functions
+async function handleExportToExcel(e) {
+    e.preventDefault();
+    
+    if (!analysisResults || !analysisResults.accounts) {
+        alert('No analysis results to export. Please run analysis first.');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/export/soql-analysis', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                accounts: analysisResults.accounts,
+                summary: analysisResults.summary
+            })
+        });
+        
+        if (response.ok) {
+            // Create download link
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `sfdc_analysis_soql_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } else {
+            const errorData = await response.json();
+            alert(`Export failed: ${errorData.message}`);
+        }
+    } catch (error) {
+        alert(`Export failed: ${error.message}`);
+    }
+}
+
+async function handleExportAccountToExcel(e) {
+    e.preventDefault();
+    
+    if (!singleAccountResults || !singleAccountResults.account) {
+        alert('No account analysis to export. Please run analysis first.');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/export/single-account', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                account: singleAccountResults.account
+            })
+        });
+        
+        if (response.ok) {
+            // Create download link
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `sfdc_analysis_single_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } else {
+            const errorData = await response.json();
+            alert(`Export failed: ${errorData.message}`);
+        }
+    } catch (error) {
+        alert(`Export failed: ${error.message}`);
+    }
+}
+
+async function handleExportExcelToExcel(e) {
+    e.preventDefault();
+    
+    if (!excelValidationResults || !excelValidationResults.analysisResults || !excelOriginalData) {
+        alert('No Excel analysis to export. Please run analysis first.');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/export/excel-analysis', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                accounts: excelValidationResults.analysisResults.accounts,
+                original_data: excelOriginalData,
+                excel_info: excelInfo
+            })
+        });
+        
+        if (response.ok) {
+            // Create download link
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `excel_analysis_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } else {
+            const errorData = await response.json();
+            alert(`Export failed: ${errorData.message}`);
+        }
+    } catch (error) {
+        alert(`Export failed: ${error.message}`);
     }
 }

@@ -222,3 +222,357 @@ class ExcelService:
                 'success': False,
                 'error': f"Error creating Excel file: {str(e)}"
             } 
+
+    def create_analysis_export(self, accounts, summary, export_type="analysis"):
+        """Create Excel export for analysis results with single table format"""
+        try:
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Account Analysis"
+            
+            # Add title to sheet
+            current_row = 1
+            title = f"SFDC Account Analysis - {export_type.replace('_', ' ').title()}"
+            ws.merge_cells(f'A{current_row}:K{current_row}')
+            ws[f'A{current_row}'] = title
+            ws[f'A{current_row}'].font = Font(bold=True, size=16, color="FFFFFF")
+            ws[f'A{current_row}'].alignment = self.center_alignment
+            ws[f'A{current_row}'].fill = PatternFill(start_color="FF7A00", end_color="FF7A00", fill_type="solid")
+            current_row += 1
+            
+            # Add timestamp
+            ws.merge_cells(f'A{current_row}:K{current_row}')
+            ws[f'A{current_row}'] = f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            ws[f'A{current_row}'].alignment = self.center_alignment
+            current_row += 2
+            
+            # Add Summary Table
+            ws.merge_cells(f'A{current_row}:K{current_row}')
+            ws[f'A{current_row}'] = "📊 Analysis Summary"
+            ws[f'A{current_row}'].font = Font(bold=True, size=14, color="2C5AA0")
+            ws[f'A{current_row}'].fill = PatternFill(start_color="F1EFEC", end_color="F1EFEC", fill_type="solid")
+            current_row += 1
+            
+            # Summary table headers
+            summary_headers = ["Metric", "Value"]
+            for col, header in enumerate(summary_headers, 1):
+                cell = ws.cell(row=current_row, column=col, value=header)
+                cell.font = self.header_font
+                cell.fill = PatternFill(start_color="0684BC", end_color="0684BC", fill_type="solid")
+                cell.alignment = self.center_alignment
+                cell.border = self.border
+            current_row += 1
+            
+            # Summary metrics
+            summary_metrics = [
+                ["Total Accounts Requested", summary.get('total_requested', 0)],
+                ["Accounts Retrieved", summary.get('accounts_retrieved', 0)],
+                ["Accounts with Shell", sum(1 for acc in accounts if acc.get('Has_Shell', False))],
+                ["Average Customer Consistency Score", 
+                 round(sum(acc.get('Customer_Consistency', {}).get('score', 0) for acc in accounts) / len(accounts), 1) if accounts else 0],
+                ["Average Customer-Shell Coherence Score", 
+                 round(sum(acc.get('Customer_Shell_Coherence', {}).get('score', 0) for acc in accounts if acc.get('Has_Shell', False)) / 
+                       sum(1 for acc in accounts if acc.get('Has_Shell', False)), 1) if any(acc.get('Has_Shell', False) for acc in accounts) else 0],
+                ["Accounts with Address Consistency", 
+                 sum(1 for acc in accounts if acc.get('Address_Consistency', {}).get('is_consistent', False))],
+                ["Average AI Confidence Score", 
+                 round(sum(acc.get('AI_Assessment', {}).get('confidence_score', 0) for acc in accounts) / len(accounts), 1) if accounts else 0]
+            ]
+            
+            for metric in summary_metrics:
+                ws[f'A{current_row}'] = metric[0]
+                ws[f'B{current_row}'] = metric[1]
+                ws[f'A{current_row}'].font = Font(bold=True)
+                ws[f'A{current_row}'].border = self.border
+                ws[f'B{current_row}'].border = self.border
+                current_row += 1
+            
+            current_row += 2
+            
+            # Add Analysis Table Header
+            ws.merge_cells(f'A{current_row}:K{current_row}')
+            ws[f'A{current_row}'] = "📋 Account Analysis Results"
+            ws[f'A{current_row}'].font = Font(bold=True, size=14, color="2C5AA0")
+            ws[f'A{current_row}'].fill = PatternFill(start_color="F1EFEC", end_color="F1EFEC", fill_type="solid")
+            current_row += 1
+            
+            # Define headers for analysis table
+            headers = [
+                # Account Identification (Frozen)
+                "Account ID", "Account Name",
+                # Account Metadata
+                "Record Type", "Parent Account ID", "Ultimate Parent", "Website", 
+                "Billing Street", "Billing City", "Billing State", "Billing Country",
+                "ZI Company", "ZI Website",
+                # Assessment Flags
+                "Has Shell", "Has Shell Explanation",
+                "Customer Consistency Score", "Customer Consistency Explanation",
+                "Customer-Shell Coherence Score", "Customer-Shell Coherence Explanation",
+                "Address Consistency", "Address Consistency Explanation",
+                # AI Assessment
+                "AI Confidence Score", "AI Analysis"
+            ]
+            
+            # Add headers
+            for col, header in enumerate(headers, 1):
+                cell = ws.cell(row=current_row, column=col, value=header)
+                cell.font = self.header_font
+                cell.fill = PatternFill(start_color="0684BC", end_color="0684BC", fill_type="solid")
+                cell.alignment = self.center_alignment
+                cell.border = self.border
+            current_row += 1
+            
+            # Add data rows
+            for row_idx, account in enumerate(accounts, current_row):
+                # Get flag explanations
+                has_shell_explanation = "Account has parent shell relationship" if account.get('Has_Shell', False) else "No parent shell relationship"
+                customer_consistency_explanation = account.get('Customer_Consistency', {}).get('explanation', '')
+                customer_shell_coherence_explanation = account.get('Customer_Shell_Coherence', {}).get('explanation', '') if account.get('Has_Shell', False) else 'N/A - No shell relationship'
+                address_consistency_explanation = account.get('Address_Consistency', {}).get('explanation', '')
+                
+                # Get AI analysis
+                ai_assessment = account.get('AI_Assessment', {})
+                ai_bullets = ai_assessment.get('explanation_bullets', [])
+                ai_analysis = "\n".join([f"• {bullet}" for bullet in ai_bullets]) if ai_bullets else "No AI analysis available"
+                
+                # Create row data
+                row_data = [
+                    # Account Identification
+                    account.get('Id', ''),
+                    account.get('Name', ''),
+                    # Account Metadata
+                    account.get('RecordType', {}).get('Name', ''),
+                    account.get('Parent_Account_ID__c', ''),
+                    account.get('Ultimate_Parent_Account_Name__c', ''),
+                    account.get('Website', ''),
+                    account.get('BillingStreet', ''),
+                    account.get('BillingCity', ''),
+                    account.get('BillingState', ''),
+                    account.get('BillingCountry', ''),
+                    account.get('ZI_Company_Name__c', ''),
+                    account.get('ZI_Website__c', ''),
+                    # Assessment Flags
+                    "✅ True" if account.get('Has_Shell', False) else "❌ False",
+                    has_shell_explanation,
+                    f"{account.get('Customer_Consistency', {}).get('score', 0)}/100",
+                    customer_consistency_explanation,
+                    f"{account.get('Customer_Shell_Coherence', {}).get('score', 0)}/100" if account.get('Has_Shell', False) else "N/A",
+                    customer_shell_coherence_explanation,
+                    "✅ True" if account.get('Address_Consistency', {}).get('is_consistent', False) else "❌ False",
+                    address_consistency_explanation,
+                    # AI Assessment
+                    f"{ai_assessment.get('confidence_score', 0)}/100",
+                    ai_analysis
+                ]
+                
+                # Add row data
+                for col, value in enumerate(row_data, 1):
+                    cell = ws.cell(row=row_idx, column=col, value=value)
+                    cell.border = self.border
+            
+            # Set frozen panes (Account ID and Name columns)
+            ws.freeze_panes = "C2"
+            
+            # Auto-adjust column widths
+            for col in range(1, len(headers) + 1):
+                ws.column_dimensions[get_column_letter(col)].width = 20
+            
+            # Create file buffer
+            file_buffer = io.BytesIO()
+            wb.save(file_buffer)
+            file_buffer.seek(0)
+            
+            # Generate filename
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"sfdc_analysis_{export_type}_{timestamp}.xlsx"
+            
+            return {
+                'success': True,
+                'file_buffer': file_buffer,
+                'filename': filename
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': f"Error creating analysis export: {str(e)}"
+            }
+
+    def create_excel_analysis_export(self, accounts, original_data, excel_info):
+        """Create Excel export for Excel analysis with original data + AI analysis in single table"""
+        try:
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Excel Analysis"
+            
+            # Add title to sheet
+            current_row = 1
+            title = f"Excel Analysis Results - {excel_info.get('file_name', 'Unknown File')}"
+            ws.merge_cells(f'A{current_row}:Z{current_row}')
+            ws[f'A{current_row}'] = title
+            ws[f'A{current_row}'].font = Font(bold=True, size=16, color="FFFFFF")
+            ws[f'A{current_row}'].alignment = self.center_alignment
+            ws[f'A{current_row}'].fill = PatternFill(start_color="FF7A00", end_color="FF7A00", fill_type="solid")
+            current_row += 1
+            
+            # Add timestamp and file info
+            ws.merge_cells(f'A{current_row}:Z{current_row}')
+            ws[f'A{current_row}'] = f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | File: {excel_info.get('file_name', 'Unknown')} | Sheet: {excel_info.get('sheet_name', 'Unknown')}"
+            ws[f'A{current_row}'].alignment = self.center_alignment
+            current_row += 2
+            
+            # Add Summary Table
+            ws.merge_cells(f'A{current_row}:Z{current_row}')
+            ws[f'A{current_row}'] = "📊 Analysis Summary"
+            ws[f'A{current_row}'].font = Font(bold=True, size=14, color="2C5AA0")
+            ws[f'A{current_row}'].fill = PatternFill(start_color="F1EFEC", end_color="F1EFEC", fill_type="solid")
+            current_row += 1
+            
+            # Summary table headers
+            summary_headers = ["Metric", "Value"]
+            for col, header in enumerate(summary_headers, 1):
+                cell = ws.cell(row=current_row, column=col, value=header)
+                cell.font = self.header_font
+                cell.fill = PatternFill(start_color="0684BC", end_color="0684BC", fill_type="solid")
+                cell.alignment = self.center_alignment
+                cell.border = self.border
+            current_row += 1
+            
+            # Summary metrics
+            def get_ai_confidence_score(account):
+                ai_assessment = account.get('AI_Assessment', {})
+                
+                # Handle case where AI assessment is a string
+                if isinstance(ai_assessment, str):
+                    try:
+                        import json
+                        ai_assessment = json.loads(ai_assessment)
+                    except (json.JSONDecodeError, TypeError):
+                        return 0
+                
+                if isinstance(ai_assessment, dict):
+                    return ai_assessment.get('confidence_score', 0)
+                return 0
+            
+            confidence_scores = [get_ai_confidence_score(acc) for acc in accounts]
+            avg_confidence = round(sum(confidence_scores) / len(accounts), 1) if accounts else 0
+            
+            summary_metrics = [
+                ["Total Excel Rows", len(original_data)],
+                ["Accounts Analyzed", len(accounts)],
+                ["Average AI Confidence Score", avg_confidence],
+                ["High Confidence (>80)", sum(1 for score in confidence_scores if score > 80)],
+                ["Medium Confidence (50-80)", sum(1 for score in confidence_scores if 50 <= score <= 80)],
+                ["Low Confidence (<50)", sum(1 for score in confidence_scores if score < 50)]
+            ]
+            
+            for metric in summary_metrics:
+                ws[f'A{current_row}'] = metric[0]
+                ws[f'B{current_row}'] = metric[1]
+                ws[f'A{current_row}'].font = Font(bold=True)
+                ws[f'A{current_row}'].border = self.border
+                ws[f'B{current_row}'].border = self.border
+                current_row += 1
+            
+            current_row += 2
+            
+            # Add Analysis Table Header
+            ws.merge_cells(f'A{current_row}:Z{current_row}')
+            ws[f'A{current_row}'] = "📋 Original Data + AI Analysis"
+            ws[f'A{current_row}'].font = Font(bold=True, size=14, color="2C5AA0")
+            ws[f'A{current_row}'].fill = PatternFill(start_color="F1EFEC", end_color="F1EFEC", fill_type="solid")
+            current_row += 1
+            
+            # Create mapping of Account IDs to analysis results
+            account_analysis_map = {acc.get('Id'): acc for acc in accounts}
+            
+            # Get original headers and add AI analysis columns
+            if original_data:
+                # Filter out any analysis-related fields from original data
+                analysis_fields = {'AI_Assessment', 'Has_Shell', 'Customer_Consistency', 'Customer_Shell_Coherence', 'Address_Consistency', 'Shell_Account_Data'}
+                original_headers = [header for header in original_data[0].keys() if header not in analysis_fields]
+                ai_headers = ["AI Confidence Score", "AI Analysis"]
+                all_headers = original_headers + ai_headers
+                
+                # Add headers
+                for col, header in enumerate(all_headers, 1):
+                    cell = ws.cell(row=current_row, column=col, value=header)
+                    cell.font = self.header_font
+                    if header in ai_headers:
+                        cell.fill = PatternFill(start_color="00A3E0", end_color="00A3E0", fill_type="solid")
+                    else:
+                        cell.fill = PatternFill(start_color="0684BC", end_color="0684BC", fill_type="solid")
+                    cell.alignment = self.center_alignment
+                    cell.border = self.border
+                current_row += 1
+                
+                # Add data rows
+                for row_idx, row_data in enumerate(original_data, current_row):
+                    # Get original data (filtered to exclude analysis fields)
+                    row_values = []
+                    for header in original_headers:
+                        value = row_data.get(header, '')
+                        
+                        # Handle RecordType field - extract Name from dictionary
+                        if header == 'RecordType' and isinstance(value, dict):
+                            value = value.get('Name', 'N/A')
+                        # Handle any other dictionary values
+                        elif isinstance(value, dict):
+                            value = str(value)  # Convert to string representation
+                        
+                        row_values.append(value)
+                    
+                    # Get AI analysis for this account
+                    account_id = row_data.get('Id', '')
+                    account_analysis = account_analysis_map.get(account_id, {})
+                    ai_assessment = account_analysis.get('AI_Assessment', {})
+                    
+                    # Handle AI assessment data safely - check if it's a string that needs parsing
+                    if isinstance(ai_assessment, str):
+                        try:
+                            import json
+                            ai_assessment = json.loads(ai_assessment)
+                        except (json.JSONDecodeError, TypeError):
+                            ai_assessment = {}
+                    
+                    confidence_score = ai_assessment.get('confidence_score', 0) if isinstance(ai_assessment, dict) else 0
+                    explanation_bullets = ai_assessment.get('explanation_bullets', []) if isinstance(ai_assessment, dict) else []
+                    
+                    ai_values = [
+                        f"{confidence_score}/100",
+                        "\n".join([f"• {bullet}" for bullet in explanation_bullets]) if explanation_bullets else "No AI analysis available"
+                    ]
+                    
+                    # Combine original and AI data
+                    all_values = row_values + ai_values
+                    
+                    for col, value in enumerate(all_values, 1):
+                        cell = ws.cell(row=row_idx, column=col, value=value)
+                        cell.border = self.border
+                
+                # No frozen panes for Excel input export
+                
+                # Auto-adjust column widths
+                for col in range(1, len(all_headers) + 1):
+                    ws.column_dimensions[get_column_letter(col)].width = 20
+            
+            # Create file buffer
+            file_buffer = io.BytesIO()
+            wb.save(file_buffer)
+            file_buffer.seek(0)
+            
+            # Generate filename
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"excel_analysis_{timestamp}.xlsx"
+            
+            return {
+                'success': True,
+                'file_buffer': file_buffer,
+                'filename': filename
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': f"Error creating Excel analysis export: {str(e)}"
+            } 

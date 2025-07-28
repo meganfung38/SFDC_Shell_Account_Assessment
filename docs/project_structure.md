@@ -139,6 +139,25 @@ def validate_excel_account_ids():
     """Validate Account IDs from Excel against Salesforce"""
 ```
 
+#### **Export Endpoints**
+```python
+@api_bp.route('/export/soql-analysis', methods=['POST'])
+def export_soql_analysis():
+    """Export SOQL analysis results to Excel"""
+```
+
+```python
+@api_bp.route('/export/single-account', methods=['POST'])
+def export_single_account():
+    """Export single account analysis to Excel"""
+```
+
+```python
+@api_bp.route('/export/excel-analysis', methods=['POST'])
+def export_excel_analysis():
+    """Export Excel analysis results to Excel"""
+```
+
 #### **Connection Testing Endpoints**
 ```python
 @api_bp.route('/test-salesforce-connection', methods=['GET'])
@@ -299,14 +318,14 @@ def compute_address_consistency(customer_account, shell_account):
     """Compute address consistency between accounts"""
 ```
 
-### **`services/excel_service.py`** - File Processing
-**Purpose**: Excel file parsing and data extraction
+### **`services/excel_service.py`** - File Processing & Export
+**Purpose**: Excel file parsing, data extraction, and export generation
 
 **Key Responsibilities**:
 - Excel file validation and parsing
 - Sheet and column detection
 - Account ID extraction
-- Data structure validation
+- Excel export generation with RingCentral theming
 
 **Key Functions**:
 ```python
@@ -317,6 +336,16 @@ def parse_excel_file(file_content):
 ```python
 def extract_account_ids_from_excel(file_content, sheet_name, column_name):
     """Extract Account IDs from specified Excel column"""
+```
+
+```python
+def create_analysis_export(accounts, summary, export_type):
+    """Create Excel export for SOQL/single account analysis"""
+```
+
+```python
+def create_excel_analysis_export(accounts, original_data, excel_info):
+    """Create Excel export for Excel input analysis"""
 ```
 
 ---
@@ -429,6 +458,10 @@ async function handleValidateAccountIds() {
 async function handleAnalyzeExcelAccounts() {
     // Handle account analysis after validation
 }
+
+async function handleExportExcelToExcel(e) {
+    // Handle Excel export with original data + AI analysis
+}
 ```
 
 #### **Output Formatting**
@@ -439,6 +472,21 @@ function formatAccountOutput(account) {
 
 function formatBillingAddress(account) {
     // Format billing address for display
+}
+```
+
+#### **Export Functionality**
+```javascript
+async function handleExportToExcel(e) {
+    // Handle SOQL analysis export
+}
+
+async function handleExportAccountToExcel(e) {
+    // Handle single account export
+}
+
+async function handleExportExcelToExcel(e) {
+    // Handle Excel input export
 }
 ```
 

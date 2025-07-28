@@ -64,11 +64,15 @@ The system queries these fields for comprehensive account analysis:
 - **✅ Confidence Scoring**: 0-100 confidence scores with detailed explanations
 - **✅ Error Handling**: Robust fallback when AI service is unavailable
 
-#### **📁 Excel Processing**
+#### **📁 Excel Processing & Export**
 - **✅ Multi-step Workflow**: Parse → Validate → Analyze
 - **✅ File Validation**: Sheet and column selection with real-time feedback
 - **✅ Account ID Validation**: Pre-analysis validation to prevent errors
 - **✅ Batch Processing**: Handle multiple accounts efficiently
+- **✅ Excel Export**: Three export types with RingCentral theming
+  - **SOQL/Single Account**: Full analysis with metadata, flags, and AI assessment
+  - **Excel Input**: Original data + AI confidence score and explanation
+  - **Summary Tables**: Processing statistics and confidence metrics
 
 #### **🔧 Technical Infrastructure**
 - **✅ Salesforce Integration**: Full API integration with connection management
@@ -170,6 +174,9 @@ curl http://localhost:5000/account/0012H00001cH3WB
 | `/accounts/get-data` | POST | Batch account data retrieval with full assessment |
 | `/excel/parse` | POST | Parse Excel files, return structure |
 | `/excel/validate-account-ids` | POST | Validate Account IDs from Excel |
+| `/export/soql-analysis` | POST | Export SOQL analysis results to Excel |
+| `/export/single-account` | POST | Export single account analysis to Excel |
+| `/export/excel-analysis` | POST | Export Excel analysis results to Excel |
 | `/test-salesforce-connection` | GET | Test Salesforce connectivity |
 | `/test-openai-connection` | GET | Test OpenAI API connectivity |
 
@@ -178,13 +185,15 @@ curl http://localhost:5000/account/0012H00001cH3WB
 ## 🎯 **Usage Examples**
 
 ### **SOQL Query Analysis**
-1. Enter a complete SOQL query (e.g., `SELECT Id FROM Account WHERE Industry = 'Technology'`)
+1. Enter complete SOQL query (e.g., `SELECT Id FROM Account WHERE Industry = 'Technology'`)
 2. Click "Validate Account IDs" to get account list
 3. Click "Analyze Accounts" for full assessment with flags and AI scoring
+4. Click "📊 Export to Excel" to download comprehensive analysis results
 
 ### **Single Account Analysis**
-1. Enter a Salesforce Account ID (15 or 18 characters)
+1. Enter Salesforce Account ID (15 or 18 characters)
 2. Click "Analyze Account" for immediate assessment
+3. Click "📊 Export to Excel" to download analysis results
 
 ### **Excel Upload Analysis**
 1. Upload Excel file with Account IDs
@@ -192,6 +201,7 @@ curl http://localhost:5000/account/0012H00001cH3WB
 3. Select sheet and Account ID column
 4. Click "Validate Account IDs" to verify with Salesforce
 5. Click "Analyze Accounts" for full assessment
+6. Click "📊 Export to Excel" to download original data + AI analysis
 
 ---
 
@@ -204,9 +214,8 @@ All workflows produce consistent, collapsible output with:
 - Validation results and account counts
 
 ### **Account Analysis**
-- **Bolded Account Headers**: Clear identification of each account
-- **Account Details**: All 12 fields in collapsible section
-- **Relationship Assessment Flags**: All 4 computed flags with scores/explanations
+- **Account Details**: All 12 Salesforce fields in collapsible section
+- **Relationship Assessment Flags**: 4 computed flags with scores/explanations
 - **Parent Shell Account Data**: Shell account information (when applicable)
 - **AI-Powered Assessment**: Confidence score (0-100) with detailed reasoning bullets
 
@@ -215,6 +224,13 @@ All workflows produce consistent, collapsible output with:
 - **Confidence Scoring**: 0-100 scores indicating relationship validity
 - **Detailed Explanations**: Bullet-point reasoning for each assessment
 - **Error Handling**: Graceful fallback when AI service unavailable
+
+### **Excel Export Features**
+- **SOQL/Single Account**: Account metadata, assessment flags, and AI analysis in organized tables with frozen panes
+- **Excel Input**: Original Excel data + AI confidence score and explanation appended to the right
+- **Summary Tables**: Processing statistics and confidence score metrics
+- **RingCentral Theming**: Professional styling with corporate colors
+- **Sample Export**: [View sample SOQL analysis export](https://docs.google.com/spreadsheets/d/1Ft1QBTmOTTPEjQGNhYmzAFUUiCoFyatc/edit?usp=sharing&ouid=113726783832302437979&rtpof=true&sd=true) 
 
 ---
 

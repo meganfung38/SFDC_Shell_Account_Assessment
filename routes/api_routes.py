@@ -223,14 +223,24 @@ def analyze_accounts_query():
             }), 400
         
         soql_query = data['soql_query']
-        max_ids = data.get('max_ids', 100)
+        max_ids = data.get('max_ids', '')
         
-        # Validate max_ids
-        if not isinstance(max_ids, int) or max_ids < 1 or max_ids > 500:
-            return jsonify({
-                'status': 'error',
-                'message': 'max_ids must be an integer between 1 and 500'
-            }), 400
+        # Handle optional max_ids parameter
+        if max_ids == '' or max_ids is None:
+            max_ids = None  # No limit
+        else:
+            try:
+                max_ids = int(max_ids)
+                if max_ids < 1 or max_ids > 500:
+                    return jsonify({
+                        'status': 'error',
+                        'message': 'max_ids must be an integer between 1 and 500, or leave blank for all results'
+                    }), 400
+            except (ValueError, TypeError):
+                return jsonify({
+                    'status': 'error',
+                    'message': 'max_ids must be a valid number, or leave blank for all results'
+                }), 400
         
         # Get Account IDs from query
         result, message = sf_service.get_account_ids_from_query(soql_query, max_ids)
@@ -486,6 +496,7 @@ def validate_excel_account_ids():
                     'original_data_rows': extraction_result['total_rows']
                 },
                 'accounts': account_data_result['accounts'],
+                'original_excel_data': extraction_result['original_data'],  # Add original Excel data
                 'execution_time': account_data_result['execution_time'],
                 'excel_info': {
                     'sheet_name': sheet_name,
@@ -499,4 +510,127 @@ def validate_excel_account_ids():
         return jsonify({
             'status': 'error',
             'message': f'Error processing Excel file: {str(e)}'
+        }), 500
+
+@api_bp.route('/export/soql-analysis', methods=['POST'])
+def export_soql_analysis():
+    """Export SOQL analysis results to Excel"""
+    try:
+        data = request.get_json()
+        if not data or 'accounts' not in data:
+            return jsonify({
+                "status": "error",
+                "message": "No analysis data provided for export"
+            }), 400
+        
+        accounts = data['accounts']
+        summary = data.get('summary', {})
+        
+        # Create Excel export
+        excel_service = ExcelService()
+        export_result = excel_service.create_analysis_export(
+            accounts=accounts,
+            summary=summary,
+            export_type="soql_analysis"
+        )
+        
+        if export_result['success']:
+            return send_file(
+                export_result['file_buffer'],
+                as_attachment=True,
+                download_name=export_result['filename'],
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+        else:
+            return jsonify({
+                "status": "error",
+                "message": export_result['error']
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Export failed: {str(e)}"
+        }), 500
+
+@api_bp.route('/export/single-account', methods=['POST'])
+def export_single_account():
+    """Export single account analysis to Excel"""
+    try:
+        data = request.get_json()
+        if not data or 'account' not in data:
+            return jsonify({
+                "status": "error",
+                "message": "No account data provided for export"
+            }), 400
+        
+        account = data['account']
+        
+        # Create Excel export
+        excel_service = ExcelService()
+        export_result = excel_service.create_analysis_export(
+            accounts=[account],
+            summary={'total_requested': 1, 'accounts_retrieved': 1},
+            export_type="single_account"
+        )
+        
+        if export_result['success']:
+            return send_file(
+                export_result['file_buffer'],
+                as_attachment=True,
+                download_name=export_result['filename'],
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+        else:
+            return jsonify({
+                "status": "error",
+                "message": export_result['error']
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Export failed: {str(e)}"
+        }), 500
+
+@api_bp.route('/export/excel-analysis', methods=['POST'])
+def export_excel_analysis():
+    """Export Excel analysis results with original data"""
+    try:
+        data = request.get_json()
+        if not data or 'accounts' not in data or 'original_data' not in data:
+            return jsonify({
+                "status": "error",
+                "message": "No analysis data or original Excel data provided for export"
+            }), 400
+        
+        accounts = data['accounts']
+        original_data = data['original_data']
+        excel_info = data.get('excel_info', {})
+        
+        # Create Excel export
+        excel_service = ExcelService()
+        export_result = excel_service.create_excel_analysis_export(
+            accounts=accounts,
+            original_data=original_data,
+            excel_info=excel_info
+        )
+        
+        if export_result['success']:
+            return send_file(
+                export_result['file_buffer'],
+                as_attachment=True,
+                download_name=export_result['filename'],
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+        else:
+            return jsonify({
+                "status": "error",
+                "message": export_result['error']
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Export failed: {str(e)}"
         }), 500

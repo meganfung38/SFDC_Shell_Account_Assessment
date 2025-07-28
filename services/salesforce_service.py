@@ -569,7 +569,7 @@ class SalesforceService:
                 'summary': {
                     'total_found': total_found,
                     'execution_time': f"{execution_time:.2f}s",
-                    'effective_limit': min(self._extract_limit_from_query(soql_query) or float('inf'), max_ids) if soql_query and soql_query.strip() else max_ids
+                    'effective_limit': min(self._extract_limit_from_query(soql_query) or float('inf'), max_ids) if soql_query and soql_query.strip() and max_ids is not None else (self._extract_limit_from_query(soql_query) or 'No limit')
                 }
             }
             
@@ -763,8 +763,11 @@ class SalesforceService:
                 return final_query
             return user_query
         else:
-            # No existing LIMIT, add our own
-            return f"{user_query} LIMIT {max_limit}"
+            # No existing LIMIT, add our own only if max_limit is not None
+            if max_limit is not None:
+                return f"{user_query} LIMIT {max_limit}"
+            else:
+                return user_query
 
     def _extract_limit_from_query(self, query):
         """Extract the LIMIT value from a SOQL query, returns None if no LIMIT found"""

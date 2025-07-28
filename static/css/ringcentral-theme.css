@@ -256,3 +256,111 @@ select:focus {
     border-color: #0684BC;
     box-shadow: 0 0 0 3px rgba(6, 132, 188, 0.1);
 } 
+
+/* Collapsible sections */
+details {
+    margin: 8px 0;
+    padding: 2px;
+    border-radius: 4px;
+    background-color: transparent;
+}
+
+details[open] {
+    padding-bottom: 2px;
+}
+
+details > summary {
+    cursor: pointer;
+    padding: 2px;
+    margin: -2px;
+    border-radius: 4px;
+}
+
+details > summary:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+details[open] > summary {
+    margin-bottom: 0px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Remove extra spacing after summary */
+details > summary + * {
+    margin-top: 0;
+    padding-top: 0;
+}
+
+/* Ensure content starts immediately after summary */
+details[open] > summary + * {
+    margin-top: 2px;
+}
+
+/* Section-specific colors */
+details:has(summary:contains("Account Details")) {
+    border-left: 3px solid #4a90e2;
+}
+
+details:has(summary:contains("Relationship Assessment Flags")) {
+    border-left: 3px solid #7ed321;
+}
+
+details:has(summary:contains("Parent Shell Account Data")) {
+    border-left: 3px solid #f5a623;
+}
+
+details:has(summary:contains("AI-Powered Relationship Assessment")) {
+    border-left: 3px solid #9013fe;
+}
+
+/* Account title styling */
+.account-header {
+    font-weight: bold;
+    margin: 10px 0 1px 0;
+}
+
+/* Consistent spacing for pre elements */
+pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-family: monospace;
+    margin: 0;
+    padding: 10px;
+    background-color: transparent;
+    border-radius: 4px;
+}
+
+/* Ensure bold text is visible */
+pre strong {
+    font-weight: bold;
+}
+
+/* Account header styling */
+pre .account-header {
+    font-weight: bold;
+    font-size: 1.1em;
+    margin: 10px 0 1px 0;
+}
+
+pre details {
+    margin-left: 0;
+    margin-right: 0;
+    background-color: transparent;
+}
+
+pre details > summary {
+    background-color: transparent;
+}
+
+/* Error and warning styles */
+.error {
+    color: #dc3545;
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+}
+
+.warning {
+    color: #856404;
+    background-color: #fff3cd;
+    border: 1px solid #ffeeba;
+} 

@@ -1,6 +1,10 @@
 from simple_salesforce.api import Salesforce
 from config.config import Config
-from typing import Optional
+from services.fuzzy_matching_service import FuzzyMatchingService
+from services.openai_service import ask_openai, client, get_system_prompt
+from typing import Optional, Dict, Any
+import json
+import time
 
 
 class SalesforceService:
@@ -9,6 +13,9 @@ class SalesforceService:
     def __init__(self):
         self.sf: Optional[Salesforce] = None
         self._is_connected = False
+        self.fuzzy_matcher = FuzzyMatchingService()
+        self._last_connection_time = 0
+        self._connection_timeout = 3600  # 1 hour in seconds
     
     def _convert_15_to_18_char_id(self, id_15):
         """Convert 15-character Salesforce ID to 18-character format"""
@@ -32,6 +39,256 @@ class SalesforceService:
         
         return id_15 + suffix
     
+    def _convert_18_to_15_char_id(self, id_18):
+        """Convert 18-character Salesforce ID to 15-character format"""
+        if len(id_18) == 15:
+            return id_18
+        elif len(id_18) == 18:
+            return id_18[:15]
+        else:
+            return id_18  # Return as-is if invalid format
+    
+    def _are_same_account_id(self, id1: str, id2: str) -> bool:
+        """Check if two Salesforce IDs refer to the same account (handles 15/18 char conversion)"""
+        if not id1 or not id2:
+            return False
+        
+        # Convert both to 15-character format for comparison
+        id1_15 = self._convert_18_to_15_char_id(str(id1).strip())
+        id2_15 = self._convert_18_to_15_char_id(str(id2).strip())
+        
+        return id1_15 == id2_15
+    
+    def compute_has_shell_flag(self, account_id: str, parent_account_id: str) -> bool:
+        """
+        Compute Has_Shell flag: True if Parent_Account_ID__c points to a different account
+        False if null or points to itself
+        """
+        if not parent_account_id:
+            return False
+        
+        # If parent account ID points to itself, it's not a child account
+        if self._are_same_account_id(account_id, parent_account_id):
+            return False
+        
+        return True
+    
+    def compute_customer_consistency_flag(self, account_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Compute Customer_Consistency flag using fuzzy matching
+        Returns dict with score and explanation
+        """
+        name = account_data.get('Name', '')
+        website = account_data.get('Website', '')
+        zi_company = account_data.get('ZI_Company_Name__c', '')
+        zi_website = account_data.get('ZI_Website__c', '')
+        
+        score, explanation = self.fuzzy_matcher.compute_customer_consistency_score(
+            name, website, zi_company, zi_website
+        )
+        
+        return {
+            'score': round(score, 1),
+            'explanation': explanation
+        }
+    
+    def get_shell_account_data(self, shell_account_id: str) -> Optional[Dict[str, Any]]:
+        """Query shell account data for comparison purposes"""
+        try:
+            if not self.ensure_connection():
+                return None
+            
+            # Query shell account fields needed for comparison
+            query = """
+            SELECT Id, Name, Website, 
+                   BillingStreet, BillingCity, BillingState, BillingCountry,
+                   ZI_Company_Name__c, ZI_Website__c
+            FROM Account 
+            WHERE Id = '{}'
+            """.format(shell_account_id)
+            
+            assert self.sf is not None
+            result = self.sf.query(query)
+            
+            if result['totalSize'] == 0:
+                return None
+                
+            shell_account = result['records'][0]
+            
+            # Remove Salesforce metadata
+            if 'attributes' in shell_account:
+                del shell_account['attributes']
+                
+            return shell_account
+            
+        except Exception as e:
+            print(f"Error querying shell account {shell_account_id}: {str(e)}")
+            return None
+    
+    def compute_customer_shell_coherence_flag(self, account_data: Dict[str, Any], shell_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Compute Customer_Shell_Coherence flag using fuzzy matching between customer and shell
+        Returns dict with score and explanation
+        """
+        score, explanation = self.fuzzy_matcher.compute_customer_shell_coherence_score(
+            account_data, shell_data
+        )
+        
+        return {
+            'score': round(score, 1),
+            'explanation': explanation
+        }
+    
+    def compute_address_consistency_flag(self, account_data: Dict[str, Any], shell_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Compute Address_Consistency flag comparing billing addresses
+        Returns dict with boolean result and explanation
+        """
+        is_consistent, explanation = self.fuzzy_matcher.compute_address_consistency(
+            account_data, shell_data
+        )
+        
+        return {
+            'is_consistent': is_consistent,
+            'explanation': explanation
+        }
+    
+    def format_data_for_openai(self, account_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Format account data according to the system prompt specification"""
+        
+        # Helper function to format billing address
+        def format_billing_address(data):
+            address_parts = []
+            if data.get('BillingStreet'):
+                address_parts.append(data['BillingStreet'])
+            if data.get('BillingCity'):
+                address_parts.append(data['BillingCity'])
+            if data.get('BillingState'):
+                address_parts.append(data['BillingState'])
+            if data.get('BillingCountry'):
+                address_parts.append(data['BillingCountry'])
+            return ', '.join(address_parts) if address_parts else None
+        
+        # Customer account data (always present)
+        formatted_data = {
+            "customer": {
+                "Name": account_data.get('Name'),
+                "Parent_Account_ID__c": account_data.get('Parent_Account_ID__c'),
+                "Website": account_data.get('Website'),
+                "Billing_Address": format_billing_address(account_data),
+                "ZI_Company_Name__c": account_data.get('ZI_Company_Name__c'),
+                "ZI_Website__c": account_data.get('ZI_Website__c')
+            },
+            "flags": {
+                "Has_Shell": account_data.get('Has_Shell', False),
+                "Customer_Consistency": {
+                    "score": account_data.get('Customer_Consistency', {}).get('score', 0),
+                    "explanation": account_data.get('Customer_Consistency', {}).get('explanation', '')
+                }
+            }
+        }
+        
+        # Parent/Shell account data (only if Has_Shell is True)
+        if account_data.get('Has_Shell') and account_data.get('Shell_Account_Data'):
+            shell_data = account_data['Shell_Account_Data']
+            formatted_data["parent"] = {
+                "Name": shell_data.get('Name'),
+                "Website": shell_data.get('Website'),
+                "Billing_Address": format_billing_address(shell_data),
+                "ZI_Company_Name__c": shell_data.get('ZI_Company_Name__c'),
+                "ZI_Website__c": shell_data.get('ZI_Website__c')
+            }
+            
+            # Add shell-related flags
+            if account_data.get('Customer_Shell_Coherence'):
+                formatted_data["flags"]["Customer_Shell_Coherence"] = {
+                    "score": account_data['Customer_Shell_Coherence'].get('score', 0),
+                    "explanation": account_data['Customer_Shell_Coherence'].get('explanation', '')
+                }
+            
+            if account_data.get('Address_Consistency'):
+                formatted_data["flags"]["Address_Consistency"] = {
+                    "is_consistent": account_data['Address_Consistency'].get('is_consistent', False),
+                    "explanation": account_data['Address_Consistency'].get('explanation', '')
+                }
+        
+        return formatted_data
+    
+    def get_ai_assessment(self, account_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Get AI-powered confidence assessment for account relationship"""
+        try:
+            # Format data according to system prompt specification
+            formatted_data = self.format_data_for_openai(account_data)
+            
+            # Get system prompt from openai_service
+            system_prompt = get_system_prompt()
+
+            # Create user prompt with formatted data
+            user_prompt = f"Please assess this account relationship:\n\n{json.dumps(formatted_data, indent=2)}"
+            
+            # Call OpenAI
+            response = ask_openai(client, system_prompt, user_prompt)
+            
+            # Parse JSON response
+            try:
+                ai_assessment = json.loads(response)
+                return {
+                    'success': True,
+                    'confidence_score': ai_assessment.get('confidence_score', 0),
+                    'explanation_bullets': ai_assessment.get('explanation_bullets', []),
+                    'raw_response': response
+                }
+            except json.JSONDecodeError as e:
+                return {
+                    'success': False,
+                    'error': f"Failed to parse AI response as JSON: {str(e)}",
+                    'raw_response': response
+                }
+                
+        except Exception as e:
+            return {
+                'success': False,
+                'error': f"Error calling OpenAI: {str(e)}"
+            }
+
+    def enrich_account_with_flags(self, account_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Enrich account data with computed flags
+        """
+        enriched_account = account_data.copy()
+        
+        # Compute Has_Shell flag
+        has_shell = self.compute_has_shell_flag(
+            account_data.get('Id', ''), 
+            account_data.get('Parent_Account_ID__c', '')
+        )
+        enriched_account['Has_Shell'] = has_shell
+        
+        # Compute Customer_Consistency flag
+        customer_consistency = self.compute_customer_consistency_flag(account_data)
+        enriched_account['Customer_Consistency'] = customer_consistency
+        
+        # If has shell, get shell account data and compute shell-related flags
+        shell_account_data = None
+        if has_shell and account_data.get('Parent_Account_ID__c'):
+            shell_account_data = self.get_shell_account_data(account_data['Parent_Account_ID__c'])
+            if shell_account_data:
+                enriched_account['Shell_Account_Data'] = shell_account_data
+                
+                # Compute Customer_Shell_Coherence flag (only when Has_Shell is True)
+                customer_shell_coherence = self.compute_customer_shell_coherence_flag(account_data, shell_account_data)
+                enriched_account['Customer_Shell_Coherence'] = customer_shell_coherence
+                
+                # Compute Address_Consistency flag (only when Has_Shell is True)
+                address_consistency = self.compute_address_consistency_flag(account_data, shell_account_data)
+                enriched_account['Address_Consistency'] = address_consistency
+        
+        # Get AI-powered confidence assessment
+        ai_assessment = self.get_ai_assessment(enriched_account)
+        enriched_account['AI_Assessment'] = ai_assessment
+        
+        return enriched_account
+    
     def connect(self):
         """Establish connection to Salesforce"""
         try:
@@ -47,6 +304,7 @@ class SalesforceService:
             )
             
             self._is_connected = True
+            self._last_connection_time = time.time()
             return True
         except Exception as e:
             print(f"Failed to connect to Salesforce: {str(e)}")
@@ -55,9 +313,14 @@ class SalesforceService:
     
     def ensure_connection(self):
         """Ensure we have an active Salesforce connection"""
-        if not self._is_connected or not self.sf:
-            return self.connect()
-        return True
+        current_time = time.time()
+        
+        # If we have a connection and it's not timed out, use it
+        if self._is_connected and self.sf and (current_time - self._last_connection_time) < self._connection_timeout:
+            return True
+            
+        # Otherwise, establish a new connection
+        return self.connect()
     
     def test_connection(self):
         """Test if connection is working by running a simple query"""
@@ -126,9 +389,25 @@ class SalesforceService:
             # Remove Salesforce metadata if present
             if 'attributes' in account_record:
                 del account_record['attributes']
-                
-            return account_record, "Account retrieved successfully"
             
+            # Enrich account with computed flags
+            enriched_account = self.enrich_account_with_flags(account_record)
+            
+            # Format response the same way as batch analysis
+            import time
+            execution_time = f"{time.time():.2f}s"
+            
+            response = {
+                'accounts': [enriched_account],  # Wrap in array to match batch format
+                'summary': {
+                    'total_requested': 1,
+                    'accounts_retrieved': 1
+                },
+                'execution_time': execution_time
+            }
+            
+            return response, "Account retrieved successfully"
+                
         except Exception as e:
             error_msg = str(e)
             # Provide cleaner error messages for common issues
@@ -259,12 +538,9 @@ class SalesforceService:
             if not self.ensure_connection():
                 return None, "Failed to establish Salesforce connection"
             
-            # Validate SOQL query
-            if not self._validate_account_soql_query(soql_query):
-                return None, "Invalid SOQL query. Must return Account IDs only (e.g., SELECT Id FROM Account, SELECT Account.Id FROM Account). Only complete SELECT queries are accepted."
-            
-            # Execute the SOQL query to get account IDs only
-            assert self.sf is not None  # Type hint for linter
+            # Quick validation of query structure
+            if not soql_query.strip().upper().startswith('SELECT'):
+                return None, "Query must start with SELECT"
             
             # Build the proper query with smart limit handling
             try:
@@ -272,20 +548,27 @@ class SalesforceService:
             except ValueError as ve:
                 return None, str(ve)
             
+            # Execute query
+            assert self.sf is not None
             id_result = self.sf.query(final_query)
-            account_ids = [record['Id'] for record in id_result['records']]
             
-            execution_time = time.time() - start_time
+            # Extract IDs efficiently
+            account_ids = [record['Id'] for record in id_result['records']]
             total_found = id_result['totalSize'] if not id_result.get('done', True) else len(account_ids)
             
+            # Return early if no results
+            if total_found == 0:
+                return None, "No Account IDs found matching the query criteria."
+            
+            # Calculate execution time
+            execution_time = time.time() - start_time
+            
+            # Build result
             result = {
                 'account_ids': account_ids,
-                'query_info': {
-                    'original_query': soql_query,
-                    'final_query': final_query,
-                    'execution_time': f"{execution_time:.2f}s",
+                'summary': {
                     'total_found': total_found,
-                    'returned_count': len(account_ids),
+                    'execution_time': f"{execution_time:.2f}s",
                     'effective_limit': min(self._extract_limit_from_query(soql_query) or float('inf'), max_ids) if soql_query and soql_query.strip() else max_ids
                 }
             }
@@ -296,15 +579,15 @@ class SalesforceService:
             error_msg = str(e)
             # Provide cleaner error messages for common SOQL issues
             if "malformed request" in error_msg.lower() or "malformed_query" in error_msg.lower():
-                return None, "Invalid SOQL syntax. Please check your query and try again. Make sure it follows proper SOQL format."
+                return None, "Invalid SOQL syntax. Please check your query and try again."
             elif "unexpected token" in error_msg.lower():
-                return None, "SOQL syntax error. Please check for typos, missing keywords, or incorrect field names in your query."
+                return None, "SOQL syntax error. Please check for typos, missing keywords, or incorrect field names."
             elif "no such column" in error_msg.lower() or "invalid field" in error_msg.lower():
                 return None, "Invalid field name in query. Please check that all field names exist in the Account object."
             elif "invalid object name" in error_msg.lower():
                 return None, "Invalid object name in query. This API only supports queries on the Account object."
             else:
-                return None, f"Error executing SOQL query: Please check your query syntax and try again."
+                return None, f"Error executing SOQL query: {error_msg}"
 
     def get_accounts_data_by_ids(self, account_ids):
         """Get full Account data for a list of Account IDs"""
@@ -347,8 +630,9 @@ class SalesforceService:
                 return None, "Failed to establish Salesforce connection"
             
             # Validate SOQL query
-            if not self._validate_account_soql_query(soql_query):
-                return None, "Invalid SOQL query. Must return Account IDs only (e.g., SELECT Id FROM Account, SELECT Account.Id FROM Account). Only complete SELECT queries are accepted."
+            is_valid, error_msg = self._validate_account_soql_query(soql_query, return_error=True)
+            if not is_valid:
+                return None, error_msg
             
             # Execute the SOQL query to get account IDs only
             assert self.sf is not None  # Type hint for linter
@@ -408,52 +692,50 @@ class SalesforceService:
         except Exception as e:
             return None, f"Error analyzing accounts from query: {str(e)}"
 
-    def _validate_account_soql_query(self, soql_query):
-        """Validate SOQL query for safety - must be complete SELECT query returning Account IDs only"""
+    def _validate_account_soql_query(self, soql_query, return_error=False):
+        """
+        Validate SOQL query for safety - must be complete SELECT query returning Account IDs only
+        If return_error is True, returns (bool, str) tuple with validation result and error message
+        """
         # Empty query is no longer valid - require complete SELECT statement
         if not soql_query or not soql_query.strip():
-            return False
+            return (False, "Empty query not allowed") if return_error else False
         
         # Convert to uppercase for checking
         query_upper = soql_query.upper().strip()
         
         # Must be a complete SELECT query, not a WHERE/LIMIT clause
         if not query_upper.startswith('SELECT'):
-            return False
+            return (False, "Query must start with SELECT") if return_error else False
         
         # For full SELECT queries, validate for security and Account ID requirement
         import re
         
         # Check for dangerous operations
         dangerous_keywords = ['DELETE', 'UPDATE', 'INSERT', 'UPSERT', 'MERGE', 'DROP', 'ALTER', 'CREATE', 'TRUNCATE']
-        for keyword in dangerous_keywords:
-            if keyword in query_upper:
-                return False
+        if any(keyword in query_upper for keyword in dangerous_keywords):
+            return (False, "Query contains dangerous keywords") if return_error else False
         
         # Extract the main SELECT clause
         select_match = re.search(r'SELECT\s+(.*?)\s+FROM', query_upper, re.DOTALL)
         if not select_match:
-            return False
+            return (False, "Invalid SELECT clause") if return_error else False
         
         select_fields = select_match.group(1).strip()
         select_fields_clean = re.sub(r'\s+', '', select_fields)
         
-        # Allow: "Id", "Account.Id", "a.Id" (with alias), etc.
-        valid_id_patterns = [
-            r'^ID$',                    # Just "Id"
-            r'^ACCOUNT\.ID$',           # "Account.Id"  
-            r'^\w+\.ID$',              # "alias.Id" (like "a.Id")
-        ]
+        # Convert to uppercase for pattern matching
+        select_fields_clean = select_fields_clean.upper()
         
-        is_valid_id_selection = any(re.match(pattern, select_fields_clean) for pattern in valid_id_patterns)
-        if not is_valid_id_selection:
-            return False
+        # Allow: "Id", "Account.Id", "a.Id" (with alias), etc.
+        if not re.match(r'^(ID|ACCOUNT\.ID|\w+\.ID)$', select_fields_clean):
+            return (False, "Query must select only Account ID field") if return_error else False
         
         # For the main FROM clause, ensure it involves Account object
         if 'ACCOUNT' not in query_upper:
-            return False
+            return (False, "Query must be from Account object") if return_error else False
         
-        return True
+        return (True, "Valid query") if return_error else True
 
     def _build_account_soql_query(self, user_query, max_limit):
         """Build the final SOQL query for accounts with smart limit handling"""
@@ -522,7 +804,10 @@ class SalesforceService:
                 # Remove Salesforce metadata if present
                 if 'attributes' in record:
                     del record['attributes']
-                analyzed_accounts.append(record)
+                
+                # Enrich account with computed flags
+                enriched_account = self.enrich_account_with_flags(record)
+                analyzed_accounts.append(enriched_account)
             
             return analyzed_accounts
             

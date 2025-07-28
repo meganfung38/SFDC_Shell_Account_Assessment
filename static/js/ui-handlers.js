@@ -8,9 +8,64 @@ let excelFileData = null;
 let excelPreviewData = null;
 let excelAnalysisResults = null;
 
+// Global variables for Excel workflow
+let excelValidationResults = null;
+
+// Export functions (placeholder implementations)
+function handleExportToExcel() {
+    alert('Export functionality coming soon!');
+}
+
+function handleExportAccountToExcel() {
+    alert('Export functionality coming soon!');
+}
+
+function handleExportExcelToExcel() {
+    alert('Export functionality coming soon!');
+}
+
 // Initialize event handlers when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
-    initializeEventHandlers();
+    // SOQL Query Analysis
+    document.getElementById('queryForm').addEventListener('submit', handleQueryFormSubmit);
+    document.getElementById('getAccountDataBtn').addEventListener('click', handleGetAccountData);
+    document.getElementById('exportBtn').addEventListener('click', handleExportToExcel);
+    
+    // Single Account Analysis
+    document.getElementById('accountForm').addEventListener('submit', handleAccountFormSubmit);
+    document.getElementById('exportAccountBtn').addEventListener('click', handleExportAccountToExcel);
+    
+    // Excel Analysis
+    document.getElementById('excelForm').addEventListener('submit', handleExcelSubmit);
+    document.getElementById('parseExcelBtn').addEventListener('click', handleExcelSubmit);
+    document.getElementById('validateAccountIdsBtn').addEventListener('click', handleValidateAccountIds);
+    document.getElementById('analyzeExcelBtn').addEventListener('click', handleAnalyzeExcelAccounts);
+    document.getElementById('exportExcelBtn').addEventListener('click', handleExportExcelToExcel);
+    
+    // File input change handler
+    document.getElementById('excelFile').addEventListener('change', function() {
+        const fileInput = this;
+        const parseBtn = document.getElementById('parseExcelBtn');
+        const excelConfig = document.getElementById('excelConfig');
+        
+        console.log('File input change detected');
+        console.log('Files length:', fileInput.files.length);
+        console.log('Parse button found:', parseBtn);
+        
+        if (fileInput.files.length > 0) {
+            console.log('Enabling parse button');
+            parseBtn.disabled = false;
+            excelConfig.style.display = 'none';
+            // Reset other buttons
+            document.getElementById('validateAccountIdsBtn').disabled = true;
+            document.getElementById('analyzeExcelBtn').disabled = true;
+            document.getElementById('exportExcelBtn').disabled = true;
+        } else {
+            console.log('Disabling parse button');
+            parseBtn.disabled = true;
+            excelConfig.style.display = 'none';
+        }
+    });
 });
 
 function initializeEventHandlers() {
@@ -70,25 +125,28 @@ async function handleQueryFormSubmit(e) {
     
     // Validate inputs
     if (isNaN(maxAnalyze) || maxAnalyze < 1 || maxAnalyze > 500) {
-        responseDiv.innerHTML = 'Max accounts to analyze must be a number between 1 and 500.';
+        responseDiv.innerHTML = '<pre class="error">❌ Error: Max accounts to analyze must be a number between 1 and 500.</pre>';
         responseDiv.className = 'response error';
         responseDiv.style.display = 'block';
+        getDataBtn.disabled = true;
         return;
     }
     
     // Validate SOQL query - must be a full query, not empty or partial
     if (!soqlQuery) {
-        responseDiv.innerHTML = 'Please enter a complete SOQL query that returns Account IDs.';
+        responseDiv.innerHTML = '<pre class="error">❌ Error: Please enter a complete SOQL query that returns Account IDs.</pre>';
         responseDiv.className = 'response error';
         responseDiv.style.display = 'block';
+        getDataBtn.disabled = true;
         return;
     }
     
     // Must start with SELECT (full query required)
     if (!soqlQuery.toUpperCase().startsWith('SELECT')) {
-        responseDiv.innerHTML = 'Please enter a complete SOQL query starting with SELECT. WHERE/LIMIT clauses alone are not accepted.';
+        responseDiv.innerHTML = '<pre class="error">❌ Error: Please enter a complete SOQL query starting with SELECT. WHERE/LIMIT clauses alone are not accepted.</pre>';
         responseDiv.className = 'response error';
         responseDiv.style.display = 'block';
+        getDataBtn.disabled = true;
         return;
     }
     
@@ -113,43 +171,38 @@ async function handleQueryFormSubmit(e) {
             })
         });
         
-        const data = await response.json();
+        const result = await response.json();
         
-        if (response.ok) {
-            analysisResults = data;
-            const accountIds = data.data.account_ids;
-            const queryInfo = data.data.query_info;
+        if (response.ok && result.status === 'success') {
+            // Store the complete result for later use
+            analysisResults = result;
             
-            // Display results
-            let output = `✅ SOQL Query Valid - Account IDs Retrieved!\n\n`;
-            output += `📊 Summary:\n`;
-            output += `- Account IDs found: ${accountIds.length}\n`;
-            output += `- Execution time: ${queryInfo.execution_time}\n`;
-            output += `- Effective limit: ${queryInfo.effective_limit}\n\n`;
-            
-            output += `🔍 Query Info:\n`;
-            output += `- Original query: ${queryInfo.original_query}\n`;
-            output += `- Final query: ${queryInfo.final_query}\n\n`;
-            
-            output += `Account IDs:\n${'='.repeat(50)}\n`;
-            accountIds.forEach((id, index) => {
-                output += `${index + 1}. ${id}\n`;
+            // Format data for display
+            displayQueryResults({
+                success: true,
+                data: result.data,
+                message: result.message
             });
             
-            responseDiv.innerHTML = `<pre>${output}</pre>`;
             responseDiv.className = 'response success';
-            
-            // Enable the next step button
-            getDataBtn.disabled = false;
         } else {
-            responseDiv.innerHTML = `❌ Error: ${data.message}`;
+            // Clear stored results
+            analysisResults = null;
+            
+            // Display error
+            const errorMessage = result.message || 'Unknown error occurred';
+            responseDiv.innerHTML = `<pre class="error">❌ Error: ${errorMessage}</pre>`;
             responseDiv.className = 'response error';
             getDataBtn.disabled = true;
             exportBtn.disabled = true;
         }
         
     } catch (error) {
-        responseDiv.innerHTML = `❌ Network Error: ${error.message}`;
+        // Clear stored results
+        analysisResults = null;
+        
+        // Display error
+        responseDiv.innerHTML = `<pre class="error">❌ Network Error: ${error.message}</pre>`;
         responseDiv.className = 'response error';
         getDataBtn.disabled = true;
         exportBtn.disabled = true;
@@ -199,39 +252,39 @@ async function handleGetAccountData(e) {
             const summary = data.data.summary;
             
             let output = `✅ Account Analysis Complete!\n\n`;
-            output += `📊 Summary:\n`;
-            output += `- Accounts requested: ${summary.total_requested}\n`;
-            output += `- Accounts retrieved: ${summary.accounts_retrieved}\n`;
-            output += `- Execution time: ${data.data.execution_time}\n\n`;
             
-            output += `Account Details:\n${'='.repeat(50)}\n\n`;
+            // Summary Section
+            output += `<details>
+<summary>📊 Summary</summary>
+- Accounts requested: ${summary.total_requested}
+- Accounts retrieved: ${summary.accounts_retrieved}
+- Execution time: ${data.data.execution_time}
+</details>
+
+`;
+            
+            // Account Analysis Section
+            output += `Account Analysis(s):\n==================================================\n\n`;
             
             accounts.forEach((account, index) => {
-                output += `${index + 1}. Account: ${account.Name} (${account.Id})\n`;
-                output += `   Record Type: ${account.RecordType?.Name || 'N/A'}\n`;
-                output += `   Website: ${account.Website || 'N/A'}\n`;
-                output += `   Ultimate Parent: ${account.Ultimate_Parent_Account_Name__c || 'N/A'}\n`;
-                output += `   Billing Address: ${formatBillingAddress(account)}\n`;
-                output += `   ZI Company: ${account.ZI_Company_Name__c || 'N/A'}\n`;
-                output += `   ZI Website: ${account.ZI_Website__c || 'N/A'}\n`;
-                output += `   Parent Account ID: ${account.Parent_Account_ID__c || 'N/A'}\n\n`;
+                // Add bold account header
+                output += `<strong>${index + 1}. ${account.Name} (${account.Id})</strong>\n\n`;
+                // Add account details with collapsible sections
+                output += formatAccountOutput(account);
             });
             
             responseDiv.innerHTML = `<pre>${output}</pre>`;
             responseDiv.className = 'response success';
             
-            // Enable export button (though it's disabled for now)
-            // exportBtn.disabled = false;
-            
             // Update stored results for future export
             analysisResults.data.accounts = accounts;
         } else {
-            responseDiv.innerHTML = `❌ Error getting account data: ${data.message}`;
+            responseDiv.innerHTML = `<pre class="error">❌ Error getting account data: ${data.message}</pre>`;
             responseDiv.className = 'response error';
         }
         
     } catch (error) {
-        responseDiv.innerHTML = `❌ Network Error: ${error.message}`;
+        responseDiv.innerHTML = `<pre class="error">❌ Network Error: ${error.message}</pre>`;
         responseDiv.className = 'response error';
     } finally {
         // Restore button state
@@ -242,70 +295,75 @@ async function handleGetAccountData(e) {
 
 async function handleAccountFormSubmit(e) {
     e.preventDefault();
-    
-    const responseDiv = document.getElementById('accountResponse');
-    const button = e.target.querySelector('button[type="submit"]');
-    const exportBtn = document.getElementById('exportAccountBtn');
-    
-    // Get form values
     const accountId = document.getElementById('accountId').value.trim();
+    const responseDiv = document.getElementById('accountResponse');
+    const button = e.target.querySelector('button');
     
-    // Validate inputs
     if (!accountId) {
-        responseDiv.innerHTML = 'Please enter an Account ID.';
-        responseDiv.className = 'response error';
+        responseDiv.innerHTML = '<pre class="error">❌ Please enter an Account ID</pre>';
         responseDiv.style.display = 'block';
         return;
     }
     
-    // Show loading state
-    button.disabled = true;
-    button.textContent = 'Analyzing...';
-    exportBtn.disabled = true;
-    responseDiv.innerHTML = 'Analyzing account...';
-    responseDiv.className = 'response loading';
-    responseDiv.style.display = 'block';
-    
     try {
-        const response = await fetch(`/account/${accountId}`);
-        const data = await response.json();
+        button.disabled = true;
+        button.textContent = 'Analyzing...';
+        responseDiv.innerHTML = 'Analyzing account...';
+        responseDiv.style.display = 'block';
+        responseDiv.className = 'response loading';
         
-        if (response.ok) {
-            singleAccountResults = data;
-            const account = data.account;
+        const response = await fetch(`/account/${accountId}`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        const data = await response.json();
+        console.log('Response data:', data); // Debug log
+        
+        if (response.ok && data.status === 'success' && data.data && data.data.accounts && data.data.accounts.length > 0) {
+            const account = data.data.accounts[0];
+            console.log('Account data:', account); // Debug log
+            
+            if (!account || !account.Id) {
+                throw new Error('Invalid account data received from server');
+            }
             
             let output = `✅ Account Analysis Complete!\n\n`;
-            output += `Account Details:\n${'='.repeat(50)}\n\n`;
-            output += `ID: ${account.Id}\n`;
-            output += `Name: ${account.Name}\n`;
-            output += `Record Type: ${account.RecordType?.Name || 'N/A'}\n`;
-            output += `Ultimate Parent: ${account.Ultimate_Parent_Account_Name__c || 'N/A'}\n`;
-            output += `Website: ${account.Website || 'N/A'}\n`;
-            output += `Billing Address: ${formatBillingAddress(account)}\n`;
-            output += `ZI Company: ${account.ZI_Company_Name__c || 'N/A'}\n`;
-            output += `ZI Website: ${account.ZI_Website__c || 'N/A'}\n`;
-            output += `Parent Account ID: ${account.Parent_Account_ID__c || 'N/A'}\n`;
+            
+            // Summary Section
+            output += `<details>
+<summary>📊 Summary</summary>
+- Account analyzed: ${accountId}
+- Execution time: ${data.data.execution_time}
+</details>
+
+`;
+            
+            // Account Analysis Section
+            output += `Account Analysis:\n==================================================\n\n`;
+            
+            // Add bold account header
+            output += `<strong>${account.Name} (${account.Id})</strong>\n\n`;
+            // Add account details with collapsible sections
+            output += formatAccountOutput(account);
             
             responseDiv.innerHTML = `<pre>${output}</pre>`;
             responseDiv.className = 'response success';
-            
-            // Enable export button (though it's disabled for now)
-            // exportBtn.disabled = false;
         } else {
-            responseDiv.innerHTML = `❌ Error: ${data.message}`;
+            const errorMsg = data.message || 'Failed to retrieve account data';
+            responseDiv.innerHTML = `<pre class="error">❌ Error: ${errorMsg}</pre>`;
             responseDiv.className = 'response error';
-            exportBtn.disabled = true;
         }
-        
     } catch (error) {
-        responseDiv.innerHTML = `❌ Network Error: ${error.message}`;
+        console.error('Error details:', error);
+        console.error('Full error object:', error);
+        responseDiv.innerHTML = `<pre class="error">❌ Network Error: ${error.message}</pre>`;
         responseDiv.className = 'response error';
-        exportBtn.disabled = true;
     } finally {
-        // Restore button state
         button.disabled = false;
         button.textContent = 'Analyze Account';
-        responseDiv.style.display = 'block';
     }
 }
 
@@ -318,6 +376,61 @@ function formatBillingAddress(account) {
     ].filter(part => part && part.trim());
     
     return parts.length > 0 ? parts.join(', ') : 'N/A';
+}
+
+function formatAccountOutput(account) {
+    let output = '';
+    
+    // Account Details Section
+    output += `<details>
+<summary>Account Details</summary>Record Type: ${account.RecordType?.Name || 'N/A'}
+Parent Account ID: ${account.Parent_Account_ID__c || 'N/A'}
+Ultimate Parent: ${account.Ultimate_Parent_Account_Name__c || 'N/A'}
+Website: ${account.Website || 'N/A'}
+Billing Address: ${formatBillingAddress(account)}
+ZI Company: ${account.ZI_Company_Name__c || 'N/A'}
+ZI Website: ${account.ZI_Website__c || 'N/A'}
+</details>`;
+
+    // Relationship Assessment Flags Section
+    output += `<details>
+<summary>🔍 Relationship Assessment Flags</summary>Has Shell: ${account.Has_Shell ? '✅ True' : '❌ False'}
+${account.Customer_Consistency ? `Customer Consistency: ${account.Customer_Consistency.score}/100
+  └─ ${account.Customer_Consistency.explanation}` : ''}
+${account.Customer_Shell_Coherence ? `Customer-Shell Coherence: ${account.Customer_Shell_Coherence.score}/100
+  └─ ${account.Customer_Shell_Coherence.explanation}` : ''}
+${account.Address_Consistency ? `Address Consistency: ${account.Address_Consistency.is_consistent ? '✅ True' : '❌ False'}
+  └─ ${account.Address_Consistency.explanation}` : ''}
+</details>`;
+
+    // Parent Shell Account Data Section
+    if (account.Shell_Account_Data) {
+        output += `<details>
+<summary>📋 Parent Shell Account Data</summary>Shell ID: ${account.Shell_Account_Data.Id}
+Shell Name: ${account.Shell_Account_Data.Name || 'N/A'}
+Shell Website: ${account.Shell_Account_Data.Website || 'N/A'}
+Shell ZI Company: ${account.Shell_Account_Data.ZI_Company_Name__c || 'N/A'}
+</details>`;
+    }
+
+    // AI Assessment Section - Open by default
+    if (account.AI_Assessment) {
+        output += `<details open>
+<summary>🤖 AI-Powered Relationship Assessment</summary>`;
+        if (account.AI_Assessment.success) {
+            output += `Overall Confidence Score: ${account.AI_Assessment.confidence_score}/100\n\nAI Analysis:`;
+            if (account.AI_Assessment.explanation_bullets && account.AI_Assessment.explanation_bullets.length > 0) {
+                account.AI_Assessment.explanation_bullets.forEach(bullet => {
+                    output += `\n  • ${bullet}`;
+                });
+            }
+        } else {
+            output += `❌ AI Assessment Failed: ${account.AI_Assessment.error || 'Unknown error'}`;
+        }
+        output += '\n</details>\n';
+    }
+
+    return output;
 }
 
 // Placeholder functions for export functionality
@@ -449,38 +562,35 @@ function populateExcelSelectors(data) {
     });
 }
 
-async function handleValidateAccountIds(e) {
-    e.preventDefault();
+async function handleValidateAccountIds() {
+    const fileInput = document.getElementById('excelFile');
+    const responseDiv = document.getElementById('excelResponse');
+    const button = document.getElementById('validateAccountIdsBtn');
+    const analyzeBtn = document.getElementById('analyzeExcelBtn');
     
-    if (!excelFileData || !excelPreviewData) {
-        alert('Please parse the Excel file first.');
+    if (!fileInput.files.length) {
+        responseDiv.innerHTML = '<pre class="error">❌ Please select an Excel file first</pre>';
         return;
     }
     
-    const button = e.target;
-    const responseDiv = document.getElementById('excelResponse');
-    const exportBtn = document.getElementById('exportExcelBtn');
     const sheetName = document.getElementById('sheetSelect').value;
     const accountIdColumn = document.getElementById('accountIdColumn').value;
     
     if (!sheetName || !accountIdColumn) {
-        alert('Please select both sheet and Account ID column.');
+        responseDiv.innerHTML = '<pre class="error">❌ Please select both sheet and Account ID column</pre>';
         return;
     }
     
-    // Show loading state
-    button.disabled = true;
-    button.textContent = 'Validating & Analyzing...';
-    exportBtn.disabled = true;
-    responseDiv.innerHTML = 'Validating Account IDs with Salesforce and retrieving Account data...';
-    responseDiv.className = 'response loading';
-    responseDiv.style.display = 'block';
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    formData.append('sheet_name', sheetName);
+    formData.append('account_id_column', accountIdColumn);
     
     try {
-        const formData = new FormData();
-        formData.append('file', excelFileData);
-        formData.append('sheet_name', sheetName);
-        formData.append('account_id_column', accountIdColumn);
+        button.disabled = true;
+        button.textContent = 'Validating...';
+        responseDiv.innerHTML = 'Validating Account IDs...';
+        responseDiv.className = 'response loading';
         
         const response = await fetch('/excel/validate-account-ids', {
             method: 'POST',
@@ -489,71 +599,318 @@ async function handleValidateAccountIds(e) {
         
         const data = await response.json();
         
-        if (response.ok) {
-            const summary = data.data.validation_summary;
+        if (response.ok && data.status === 'success') {
+            excelValidationResults = data.data;
+            
+            let output = `✅ Account IDs Validated Successfully!\n\n`;
+            
+            // Summary Section
+            output += `<details>
+<summary>📊 Validation Summary</summary>
+- Total IDs from Excel: ${data.data.validation_summary.total_ids_from_excel}
+- Valid Account IDs: ${data.data.validation_summary.valid_account_ids}
+- Invalid Account IDs: ${data.data.validation_summary.invalid_account_ids}
+- Execution time: ${data.data.execution_time}
+</details>
+
+`;
+            
+            // Excel File Info Section
+            output += `<details>
+<summary>📁 Excel File Info</summary>
+- File: ${data.data.excel_info.file_name}
+- Sheet: ${data.data.excel_info.sheet_name}
+- Account ID Column: ${data.data.excel_info.account_id_column}
+</details>
+
+`;
+            
+            if (data.data.validation_summary.valid_account_ids > 0) {
+                output += `\n✅ **${data.data.validation_summary.valid_account_ids} valid Account IDs found.** Click "Analyze Accounts" to proceed with analysis.\n`;
+                analyzeBtn.disabled = false;
+            } else {
+                output += `\n❌ **No valid Account IDs found.** Please check your Excel file and try again.\n`;
+                analyzeBtn.disabled = true;
+            }
+            
+            responseDiv.innerHTML = `<pre>${output}</pre>`;
+            responseDiv.className = 'response success';
+        } else {
+            responseDiv.innerHTML = `<pre class="error">❌ Error: ${data.message}</pre>`;
+            responseDiv.className = 'response error';
+            analyzeBtn.disabled = true;
+        }
+    } catch (error) {
+        responseDiv.innerHTML = `<pre class="error">❌ Network Error: ${error.message}</pre>`;
+        responseDiv.className = 'response error';
+        analyzeBtn.disabled = true;
+    } finally {
+        button.disabled = false;
+        button.textContent = 'Validate Account IDs';
+    }
+}
+
+function displayQueryResults(result) {
+    const responseDiv = document.getElementById('queryResponse');
+    const getDataBtn = document.getElementById('getAccountDataBtn');
+    
+    if (!result.success) {
+        const errorMessage = result.message || result.error || 'Unknown error occurred';
+        responseDiv.innerHTML = `<pre class="error">❌ Error: ${errorMessage}</pre>`;
+        getDataBtn.disabled = true;
+        return;
+    }
+    
+    const data = result.data;
+    if (!data || !data.account_ids) {
+        responseDiv.innerHTML = '<pre class="warning">⚠️ No Account IDs found matching the query criteria.</pre>';
+        getDataBtn.disabled = true;
+        return;
+    }
+    
+    // If we have account IDs, show the results
+    if (data.account_ids.length === 0) {
+        responseDiv.innerHTML = '<pre class="warning">⚠️ No Account IDs found matching the query criteria.</pre>';
+        getDataBtn.disabled = true;
+        return;
+    }
+    
+    let output = '✅ SOQL Query Valid - Account IDs Retrieved!\n\n';
+    
+    // Summary section
+    output += '📊 Summary:\n';
+    output += `- Account IDs found: ${data.summary.total_found}\n`;
+    output += `- Execution time: ${data.summary.execution_time}\n`;
+    output += `- Effective limit: ${data.summary.effective_limit}\n\n`;
+    
+    // Account IDs section
+    output += 'Account IDs:\n';
+    output += '==================================================\n';
+    data.account_ids.forEach((id, index) => {
+        output += `${index + 1}. ${id}\n`;
+    });
+    
+    responseDiv.innerHTML = `<pre>${output}</pre>`;
+    
+    // Only enable the Analyze button if we have account IDs
+    getDataBtn.disabled = false;
+}
+
+async function handleSingleAccountSubmit(e) {
+    e.preventDefault();
+    const accountId = document.getElementById('accountId').value.trim();
+    const responseDiv = document.getElementById('accountResponse');
+    const button = e.target.querySelector('button');
+    
+    if (!accountId) {
+        responseDiv.innerHTML = '<pre class="error">❌ Please enter an Account ID</pre>';
+        responseDiv.style.display = 'block';
+        return;
+    }
+    
+    try {
+        button.disabled = true;
+        button.textContent = 'Analyzing...';
+        responseDiv.innerHTML = 'Analyzing account...';
+        responseDiv.style.display = 'block';
+        responseDiv.className = 'response loading';
+        
+        const response = await fetch(`/account/${accountId}`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        const data = await response.json();
+        console.log('Response data:', data); // Debug log
+        
+        if (response.ok && data.status === 'success' && data.data && data.data.accounts && data.data.accounts.length > 0) {
+            const account = data.data.accounts[0];
+            console.log('Account data:', account); // Debug log
+            
+            if (!account || !account.Id) {
+                throw new Error('Invalid account data received from server');
+            }
+            
+            let output = `✅ Account Analysis Complete!\n\n`;
+            
+            // Summary Section
+            output += `<details>
+<summary>📊 Summary</summary>
+- Account analyzed: ${accountId}
+- Execution time: ${data.data.execution_time}
+</details>
+
+`;
+            
+            // Account Analysis Section
+            output += `Account Analysis:\n==================================================\n\n`;
+            
+            // Add bold account header
+            output += `<strong>${account.Name} (${account.Id})</strong>\n\n`;
+            // Add account details with collapsible sections
+            output += formatAccountOutput(account);
+            
+            responseDiv.innerHTML = `<pre>${output}</pre>`;
+            responseDiv.className = 'response success';
+        } else {
+            const errorMsg = data.message || 'Failed to retrieve account data';
+            responseDiv.innerHTML = `<pre class="error">❌ Error: ${errorMsg}</pre>`;
+            responseDiv.className = 'response error';
+        }
+    } catch (error) {
+        console.error('Error details:', error);
+        console.error('Full error object:', error);
+        responseDiv.innerHTML = `<pre class="error">❌ Network Error: ${error.message}</pre>`;
+        responseDiv.className = 'response error';
+    } finally {
+        button.disabled = false;
+        button.textContent = 'Analyze Account';
+    }
+}
+
+async function handleExcelSubmit(e) {
+    e.preventDefault();
+    const fileInput = document.getElementById('excelFile');
+    const responseDiv = document.getElementById('excelResponse');
+    const button = e.target; // The button that was clicked
+    
+    if (!fileInput.files.length) {
+        responseDiv.innerHTML = '<pre class="error">❌ Please select an Excel file</pre>';
+        responseDiv.style.display = 'block';
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    
+    try {
+        button.disabled = true;
+        button.textContent = 'Parsing...';
+        responseDiv.innerHTML = 'Parsing Excel file...';
+        responseDiv.style.display = 'block';
+        responseDiv.className = 'response loading';
+        
+        const response = await fetch('/excel/parse', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.status === 'success') {
+            // Show Excel configuration options
+            const excelConfig = document.getElementById('excelConfig');
+            const sheetSelect = document.getElementById('sheetSelect');
+            const accountIdColumn = document.getElementById('accountIdColumn');
+            
+            // Populate sheet dropdown
+            sheetSelect.innerHTML = '';
+            data.data.sheet_names.forEach(sheet => {
+                const option = document.createElement('option');
+                option.value = sheet;
+                option.textContent = sheet;
+                sheetSelect.appendChild(option);
+            });
+            
+            // Populate column dropdown
+            accountIdColumn.innerHTML = '';
+            data.data.headers.forEach(header => {
+                const option = document.createElement('option');
+                option.value = header;
+                option.textContent = header;
+                accountIdColumn.appendChild(option);
+            });
+            
+            excelConfig.style.display = 'block';
+            responseDiv.innerHTML = '<pre class="success">✅ Excel file parsed successfully. Please select sheet and column, then validate Account IDs.</pre>';
+            responseDiv.className = 'response success';
+            
+            // Enable the Validate Account IDs button
+            document.getElementById('validateAccountIdsBtn').disabled = false;
+        } else {
+            responseDiv.innerHTML = `<pre class="error">❌ Error: ${data.message}</pre>`;
+            responseDiv.className = 'response error';
+        }
+    } catch (error) {
+        responseDiv.innerHTML = `<pre class="error">❌ Network Error: ${error.message}</pre>`;
+        responseDiv.className = 'response error';
+    } finally {
+        button.disabled = false;
+        button.textContent = 'Parse File';
+    }
+}
+
+async function handleAnalyzeExcelAccounts() {
+    const responseDiv = document.getElementById('excelResponse');
+    const button = document.getElementById('analyzeExcelBtn');
+    
+    if (!excelValidationResults || !excelValidationResults.accounts) {
+        responseDiv.innerHTML = '<pre class="error">❌ No validated accounts found. Please validate Account IDs first.</pre>';
+        return;
+    }
+    
+    try {
+        button.disabled = true;
+        button.textContent = 'Analyzing...';
+        responseDiv.innerHTML = 'Analyzing accounts...';
+        responseDiv.className = 'response loading';
+        
+        // Extract account IDs from validated results
+        const accountIds = excelValidationResults.accounts.map(account => account.Id);
+        
+        const response = await fetch('/accounts/get-data', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                account_ids: accountIds
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.status === 'success' && data.data && data.data.accounts) {
             const accounts = data.data.accounts;
-            const excelInfo = data.data.excel_info;
+            const summary = data.data.summary;
             
-            let output = `✅ Excel Account Analysis Complete!\n\n`;
-            output += `📊 Validation Summary:\n`;
-            output += `- Total IDs from Excel: ${summary.total_ids_from_excel}\n`;
-            output += `- Valid Account IDs: ${summary.valid_account_ids}\n`;
-            output += `- Invalid Account IDs: ${summary.invalid_account_ids}\n`;
-            output += `- Execution time: ${data.data.execution_time}\n\n`;
+            let output = `✅ Account Analysis Complete!\n\n`;
             
-            output += `📁 Excel File Info:\n`;
-            output += `- File: ${excelInfo.file_name}\n`;
-            output += `- Sheet: ${excelInfo.sheet_name}\n`;
-            output += `- Account ID Column: ${excelInfo.account_id_column}\n\n`;
+            // Summary Section
+            output += `<details>
+<summary>📊 Summary</summary>
+- Excel rows processed: ${excelValidationResults.validation_summary.total_ids_from_excel}
+- Valid Account IDs found: ${excelValidationResults.validation_summary.valid_account_ids}
+- Accounts analyzed: ${summary.accounts_retrieved}
+- Execution time: ${data.data.execution_time}
+</details>
+
+`;
             
-            output += `Account Details:\n${'='.repeat(50)}\n\n`;
+            // Account Analysis Section
+            output += `Account Analysis(s):\n==================================================\n\n`;
             
             accounts.forEach((account, index) => {
-                output += `${index + 1}. Account: ${account.Name} (${account.Id})\n`;
-                output += `   Record Type: ${account.RecordType?.Name || 'N/A'}\n`;
-                output += `   Website: ${account.Website || 'N/A'}\n`;
-                output += `   Ultimate Parent: ${account.Ultimate_Parent_Account_Name__c || 'N/A'}\n`;
-                output += `   Billing Address: ${formatBillingAddress(account)}\n`;
-                output += `   ZI Company: ${account.ZI_Company_Name__c || 'N/A'}\n`;
-                output += `   ZI Website: ${account.ZI_Website__c || 'N/A'}\n`;
-                output += `   Parent Account ID: ${account.Parent_Account_ID__c || 'N/A'}\n\n`;
+                // Add bold account header
+                output += `<strong>${index + 1}. ${account.Name} (${account.Id})</strong>\n\n`;
+                // Add account details with collapsible sections
+                output += formatAccountOutput(account);
             });
             
             responseDiv.innerHTML = `<pre>${output}</pre>`;
             responseDiv.className = 'response success';
-            
-            // Enable export button (though it's disabled for now)
-            // exportBtn.disabled = false;
-            
-            // Store results for future export
-            excelAnalysisResults = data;
         } else {
-            if (data.data && data.data.invalid_account_ids && data.data.invalid_account_ids.length > 0) {
-                let output = `❌ Validation Failed!\n\n`;
-                output += `📋 Validation Summary:\n`;
-                output += `- Total IDs from Excel: ${data.data.total_from_excel}\n`;
-                output += `- Valid Account IDs: ${data.data.valid_account_ids.length}\n`;
-                output += `- Invalid Account IDs: ${data.data.invalid_account_ids.length}\n\n`;
-                
-                output += `❌ Invalid Account IDs found:\n`;
-                data.data.invalid_account_ids.forEach(id => {
-                    output += `  • ${id}\n`;
-                });
-                output += `\n❌ Please fix the invalid Account IDs before proceeding.`;
-                
-                responseDiv.innerHTML = `<pre>${output}</pre>`;
-            } else {
-                responseDiv.innerHTML = `❌ Error: ${data.message}`;
-            }
+            const errorMsg = data.message || 'Failed to analyze accounts';
+            responseDiv.innerHTML = `<pre class="error">❌ Error: ${errorMsg}</pre>`;
             responseDiv.className = 'response error';
-            exportBtn.disabled = true;
         }
     } catch (error) {
-        responseDiv.innerHTML = `❌ Network Error: ${error.message}`;
+        responseDiv.innerHTML = `<pre class="error">❌ Network Error: ${error.message}</pre>`;
         responseDiv.className = 'response error';
-        exportBtn.disabled = true;
     } finally {
         button.disabled = false;
-        button.textContent = '2. Validate Account IDs';
+        button.textContent = 'Analyze Accounts';
     }
 }

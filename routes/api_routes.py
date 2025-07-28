@@ -90,17 +90,17 @@ def test_salesforce_connection():
             "message": f"Unexpected error: {str(e)}"
         }), 500
 
-@api_bp.route('/account/<account_id>')
+@api_bp.route('/account/<account_id>', methods=['GET', 'POST'])
 def get_account(account_id):
     """Get specific Account data by Account ID"""
     try:
-        account_data, message = sf_service.get_account_by_id(account_id)
+        result, message = sf_service.get_account_by_id(account_id)
         
-        if account_data:
+        if result:
             return jsonify({
                 "status": "success",
                 "message": message,
-                "account": account_data
+                "data": result
             })
         else:
             return jsonify({
@@ -236,11 +236,28 @@ def analyze_accounts_query():
         result, message = sf_service.get_account_ids_from_query(soql_query, max_ids)
         
         if result is None:
-            return jsonify({
-                'status': 'error',
-                'message': message
-            }), 400
+            # Check if it's a validation error or just no results
+            if "Invalid" in message or "Error" in message:
+                return jsonify({
+                    'status': 'error',
+                    'message': message
+                }), 400
+            else:
+                # No results is not an error
+                return jsonify({
+                    'status': 'success',
+                    'message': message,
+                    'data': {
+                        'account_ids': [],
+                        'summary': {
+                            'total_found': 0,
+                            'execution_time': '0.00s',
+                            'effective_limit': max_ids
+                        }
+                    }
+                })
         
+        # Success with results
         return jsonify({
             'status': 'success',
             'message': message,
@@ -250,7 +267,7 @@ def analyze_accounts_query():
     except Exception as e:
         return jsonify({
             'status': 'error',
-            'message': f'Error getting Account IDs from query: {str(e)}'
+            'message': str(e)
         }), 500
 
 @api_bp.route('/accounts/get-data', methods=['POST'])

@@ -484,7 +484,21 @@ class ExcelService:
             current_row += 1
             
             # Create mapping of Account IDs to analysis results
-            account_analysis_map = {acc.get('Id'): acc for acc in accounts}
+            # FIX: Handle both 15-character and 18-character ID formats for matching
+            # Issue: Excel input contains 15-character IDs, but Salesforce analysis returns 18-character IDs
+            # Solution: Store both formats in the mapping to enable proper matching
+            account_analysis_map = {}
+            for acc in accounts:
+                account_id = acc.get('Id', '')
+                if account_id:
+                    # Store with the 18-character ID (from analysis results)
+                    account_analysis_map[account_id] = acc
+                    # Also store with the 15-character ID for matching with original Excel data
+                    if len(account_id) == 18:
+                        account_analysis_map[account_id[:15]] = acc
+                    elif len(account_id) == 15:
+                        # If we have a 15-character ID, also store the 18-character version
+                        account_analysis_map[self._convert_15_to_18_char_id(account_id)] = acc
             
             # Get original headers and add AI analysis columns
             if original_data:
@@ -523,8 +537,35 @@ class ExcelService:
                         row_values.append(value)
                     
                     # Get AI analysis for this account
+                    # FIX: Handle different column names for account IDs in original Excel data
+                    # Issue: Original Excel data may have account IDs in user-selected column, not 'Id'
+                    # Solution: Try multiple approaches to find the account ID
                     account_id = row_data.get('Id', '')
+                    
+                    # If 'Id' is not found, try to find the account ID column from excel_info
+                    if not account_id and excel_info and 'account_id_column' in excel_info:
+                        account_id_column = excel_info['account_id_column']
+                        account_id = row_data.get(account_id_column, '')
+                    
+                    # If still no account_id found, try to find any field that looks like an account ID
+                    if not account_id:
+                        for key, value in row_data.items():
+                            if isinstance(value, str) and len(value) in [15, 18] and value.startswith('001'):
+                                account_id = value
+                                break
+                    
                     account_analysis = account_analysis_map.get(account_id, {})
+                    
+                    # If no match found, try to find by converting the ID
+                    if not account_analysis and account_id:
+                        if len(account_id) == 15:
+                            # Try with 18-character version
+                            converted_id = self._convert_15_to_18_char_id(account_id)
+                            account_analysis = account_analysis_map.get(converted_id, {})
+                        elif len(account_id) == 18:
+                            # Try with 15-character version
+                            account_analysis = account_analysis_map.get(account_id[:15], {})
+                    
                     ai_assessment = account_analysis.get('AI_Assessment', {})
                     
                     # Handle AI assessment data safely - check if it's a string that needs parsing

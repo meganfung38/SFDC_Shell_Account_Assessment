@@ -86,7 +86,7 @@ Assign higher scores for:
 * Known brand affiliation patterns (e.g., franchisee sites using parent domain)   
 * Strong real-world confirmation of relationship 
 
-5 Explanation (3-5 bullets)   
+## **5 Explanation (3-5 bullets)**   
 Each explanation bullet should: 
 
 * Be concise (\<= 25 words)   
@@ -103,7 +103,7 @@ Examples:
 ❌ Billing address differs significantly from shell and no match found in public directories  
 ⚠️ Shell name and customer name share low similarity but share a ZoomInfo org
 
-7 Output Format (Strict JSON)   
+## **6 Output Format (Strict JSON)**   
 {  
   "confidence\_score": \<int 0–100\>,  
   "explanation\_bullets": \[  

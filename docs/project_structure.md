@@ -12,7 +12,6 @@ SFDC_Shell_Account_Assessment/
 ├── README.md                       # Project overview and setup guide
 ├── config/                         # Configuration and dependencies
 ├── docs/                          # Project documentation
-├── ml_account_matching/           # Separate ML analysis system
 ├── routes/                        # API route definitions
 ├── services/                      # Core business logic services
 ├── static/                        # Frontend assets (CSS, JS)
@@ -218,10 +217,16 @@ def get_accounts_data_by_ids(self, account_ids):
     """Batch retrieve accounts with full assessment"""
 ```
 
+**Salesforce Fields Queried (12 fields)**:
+- Standard fields: `Id`, `Name`, `Website`, `RecordType.Name`
+- Billing address: `BillingState`, `BillingCountry`, `BillingPostalCode`  
+- ZI enriched data: `ZI_Company_Name__c`, `ZI_Website__c`, `ZI_Company_State__c`, `ZI_Company_Country__c`, `ZI_Company_Postal_Code__c`
+- Parent relationship: `ParentId`, `Parent.Name`
+
 #### **Flag Computation**
 ```python
 def compute_has_shell_flag(self, account):
-    """Compute Has_Shell flag (Boolean)"""
+    """Compute Has_Shell flag (Boolean) - checks ParentId existence"""
 ```
 
 ```python
@@ -231,12 +236,12 @@ def compute_customer_consistency_flag(self, account):
 
 ```python
 def compute_customer_shell_coherence_flag(self, account, shell_data):
-    """Compute Customer_Shell_Coherence flag (0-100 score)"""
+    """Compute Customer_Shell_Coherence flag (0-100 score) - shows specific field comparisons"""
 ```
 
 ```python
 def compute_address_consistency_flag(self, account, shell_data):
-    """Compute Address_Consistency flag (Boolean)"""
+    """Compute Address_Consistency flag (Boolean) - uses intelligent field precedence"""
 ```
 
 #### **SOQL Query Processing**
@@ -315,8 +320,14 @@ def compute_customer_shell_coherence_score(customer_account, shell_account):
 
 ```python
 def compute_address_consistency(customer_account, shell_account):
-    """Compute address consistency between accounts"""
+    """Compute address consistency with intelligent field precedence:
+    Customer Billing_Address vs Parent ZI_Billing_Address (with fallbacks)"""
 ```
+
+**Address Comparison Precedence**:
+- Customer: Billing_Address → ZI_Billing_Address (fallback)
+- Parent: ZI_Billing_Address → Billing_Address (fallback)
+- Shows exact fields compared in explanations
 
 ### **`services/excel_service.py`** - File Processing & Export
 **Purpose**: Excel file parsing, data extraction, and export generation
@@ -514,26 +525,6 @@ async function handleExportExcelToExcel(e) {
 
 ### **`docs/project_structure.md`** (This File)
 **Purpose**: Codebase organization and architecture guide
-
----
-
-## 🤖 **ML System (`ml_account_matching/`)**
-
-### **Overview**
-A separate machine learning system for analyzing field comparison patterns.
-
-**Status**: ✅ **Completed but Limited by Data**
-- Successfully implemented 77 comparison features
-- Trained decision tree model
-- Found insufficient data variation for production use
-- Ready for diverse datasets when available
-
-**Key Files**:
-- `requirements.txt` - ML dependencies
-- `data_processor.py` - Data loading and preparation
-- `feature_engineer.py` - 77 comparison feature creation
-- `decision_tree_model.py` - ML training and analysis
-- `README.md` - Complete ML documentation
 
 ---
 

@@ -49,13 +49,17 @@ The system queries these fields for comprehensive account analysis:
 - `Name` - Account name
 - `Website` - Account's website URL
 - `RecordType.Name` - Account type (Shell vs Customer)
-- `BillingStreet`, `BillingCity`, `BillingState`, `BillingCountry` - Billing address
 
-**Custom ZoomInfo Fields:**
-- `Ultimate_Parent_Account_Name__c` - Ultimate parent account name
-- `ZI_Company_Name__c` - ZoomInfo company name
-- `ZI_Website__c` - ZoomInfo website
-- `Parent_Account_ID__c` - Parent account ID reference
+**Address Fields:**
+- `BillingState`, `BillingCountry`, `BillingPostalCode` - Billing address components
+- `ZI_Company_State__c`, `ZI_Company_Country__c`, `ZI_Company_Postal_Code__c` - ZoomInfo address data
+
+**ZoomInfo Enriched Fields:**
+- `ZI_Company_Name__c`, `ZI_Website__c` - Enriched company data
+
+**Parent Relationship Fields:**
+- `ParentId` - Parent account ID via relationship
+- `Parent.Name` - Parent account name via relationship
 
 #### **🤖 AI Assessment System**
 - **✅ OpenAI GPT-4o Integration**: Advanced AI-powered relationship validation
@@ -87,7 +91,7 @@ The system queries these fields for comprehensive account analysis:
 ### **Core Technologies**
 - **Backend**: Python Flask API
 - **Data Layer**: Salesforce API integration via simple-salesforce
-- **AI/ML**: OpenAI GPT-4o integration
+- **AI**: OpenAI GPT-4o integration
 - **Frontend**: Responsive web interface with HTML/CSS/JavaScript
 - **Data Processing**: pandas, openpyxl for Excel handling
 - **Fuzzy Matching**: Custom service with domain extraction and name normalization
@@ -104,10 +108,10 @@ services/
 ### **Key Components**
 
 #### **Flag Computation Engine**
-- **Has_Shell**: Validates parent account relationships with 15/18-character ID handling
+- **Has_Shell**: Validates parent account relationships using `ParentId` field
 - **Customer_Consistency**: Fuzzy matching between account name and website/ZI data
-- **Customer_Shell_Coherence**: Multi-dimensional comparison between customer and shell metadata
-- **Address_Consistency**: Geographic validation of billing address relationships
+- **Customer_Shell_Coherence**: Multi-dimensional comparison with detailed field-level explanations
+- **Address_Consistency**: Intelligent address comparison using field precedence (Customer Billing vs Parent ZI, with fallbacks)
 
 #### **AI Assessment System**
 - **System Prompt**: Comprehensive instructions for relationship validation

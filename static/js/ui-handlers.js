@@ -330,10 +330,19 @@ async function handleAccountFormSubmit(e) {
 
 function formatBillingAddress(account) {
     const parts = [
-        account.BillingStreet,
-        account.BillingCity,
         account.BillingState,
-        account.BillingCountry
+        account.BillingCountry,
+        account.BillingPostalCode
+    ].filter(part => part && part.trim());
+    
+    return parts.length > 0 ? parts.join(', ') : 'N/A';
+}
+
+function formatZIBillingAddress(account) {
+    const parts = [
+        account.ZI_Company_State__c,
+        account.ZI_Company_Country__c,
+        account.ZI_Company_Postal_Code__c
     ].filter(part => part && part.trim());
     
     return parts.length > 0 ? parts.join(', ') : 'N/A';
@@ -345,12 +354,13 @@ function formatAccountOutput(account) {
     // Account Details Section
     output += `<details>
 <summary>Account Details</summary>Record Type: ${account.RecordType?.Name || 'N/A'}
-Parent Account ID: ${account.Parent_Account_ID__c || 'N/A'}
-Ultimate Parent: ${account.Ultimate_Parent_Account_Name__c || 'N/A'}
 Website: ${account.Website || 'N/A'}
 Billing Address: ${formatBillingAddress(account)}
 ZI Company: ${account.ZI_Company_Name__c || 'N/A'}
 ZI Website: ${account.ZI_Website__c || 'N/A'}
+ZI Billing Address: ${formatZIBillingAddress(account)}
+Parent ID: ${account.ParentId || 'No parent linked'}
+Parent: ${account.Parent?.Name || 'No parent linked'}
 </details>`;
 
     // Relationship Assessment Flags Section
@@ -370,7 +380,10 @@ ${account.Address_Consistency ? `Address Consistency: ${account.Address_Consiste
 <summary>📋 Parent Shell Account Data</summary>Shell ID: ${account.Shell_Account_Data.Id}
 Shell Name: ${account.Shell_Account_Data.Name || 'N/A'}
 Shell Website: ${account.Shell_Account_Data.Website || 'N/A'}
+Shell Billing Address: ${formatBillingAddress(account.Shell_Account_Data)}
 Shell ZI Company: ${account.Shell_Account_Data.ZI_Company_Name__c || 'N/A'}
+Shell ZI Website: ${account.Shell_Account_Data.ZI_Website__c || 'N/A'}
+Shell ZI Billing Address: ${formatZIBillingAddress(account.Shell_Account_Data)}
 </details>`;
     }
 

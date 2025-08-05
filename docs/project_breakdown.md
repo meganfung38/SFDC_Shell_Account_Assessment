@@ -41,20 +41,21 @@
 | :---- | :---- | :---- |
 | *Id*  | 18 Character SFDC Id | Id |
 | *Account Name*  | Company/ Organization/ Personal Name | Name |
-| *Parent Account ID*  | 15 Character SFDC Id | Parent\_Account\_ID\_\_c |
-| *Ultimate Parent Account Name*  | Shell Account Company/ Organization | Ultimate\_Parent\_Account\_Name\_\_c |
+| *Parent Account ID*  | 18 Character SFDC Id | ParentId |
+| *Parent Account Name*  | Shell Account Company/ Organization | Parent.Name |
 | *Website*  | Associated Website | Website |
-| *Billing Address*  | Location  | BillingStreet, BillingCity, BillingState, BillingCountry |
+| *Billing Address*  | Location  | BillingState, BillingCountry, BillingPostalCode |
 | *ZI Company Name*  | ZoomInfo Enriched Company Name | ZI\_Company\_Name\_\_c |
 | *ZI Website* | ZoomInfo Enriched Company Name | ZI\_Website\_\_c  |
+| *ZI Billing Address*  | Location  | ZI_Company_State, ZI_Company_Country__c, ZI_Company_Postal_Code__c |
 
 * Flags: 
 
 | Flags  | Data Type | Meaning  |
 | :---- | :---- | :---- |
-| Has\_Shell  | Boolean (True/ False) | Whether Parent\_Account\_ID\_\_c is null or points to itself |
+| Has\_Shell  | Boolean (True/ False) | Whether ParentId is null or points to itself |
 | Customer\_Consistency   | Fuzzy Match Score (0-100) | Whether the account name and website align |
-| Customer\_Shell\_Coherence  | Fuzzy Match Score (0-100) | Whether the customer account metadata aligns with its shell’s metadata (name and website) ONLY compute if Has\_Shell is TRUE |
+| Customer\_Shell\_Coherence  | Fuzzy Match Score (0-100) | Whether the customer account metadata aligns with its shell's metadata (name and website) ONLY compute if Has\_Shell is TRUE |
 | Address\_Consistency | Boolean (True/ False) | Whether the customer and shell billing addresses match ONLY compute if Has\_Shell is TRUE |
 
 2. Confidence Score Generation  

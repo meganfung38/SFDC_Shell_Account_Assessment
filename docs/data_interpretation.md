@@ -20,11 +20,12 @@ For each record, you will output a JSON object with:
 | Field  | Data Type | Description  | Trust Level  | For Which Account?  |
 | :---- | :---- | :---- | :---- | :---- |
 | Name  | String  | Company/ Organization/ Personal Name | Trusted | Customer  Parent  |
-| Parent\_Account\_ID\_\_c  | String (15 character SFDC ID) | SFDC ID linking customer to its shell | Trusted | Customer  |
+| ParentId  | String (18 character SFDC ID) | SFDC ID linking customer to its shell | Trusted | Customer  |
 | Website | String  | Website owned by the account | Trusted  | Customer  Parent  |
-| Billing Address | String  | Full billing address | Trusted  | Customer  Parent  |
+| Billing\_Address | String  | State, Country, Postal Code | Trusted  | Customer  Parent  |
 | ZI\_Company\_Name\_\_c | String  | ZoomInfo enriched company/ organization name  | Semi-reliable (enriched data– could be inaccurate) | Customer  Parent  |
 | ZI\_Website\_\_c  | String  | ZoomInfo enriched website  | Semi-reliable (enriched data– could be inaccurate)  | Customer  Parent  |
+| ZI\_Billing\_Address | String | ZoomInfo enriched State, Country, Postal Code | Semi-reliable (enriched data– could be inaccurate) | Customer Parent |
 | Has\_Shell  | Boolean  | TRUE if the account rolls up to a shell account  | Trusted  | Customer  |
 | Customer\_Consistency  | Score (0-100) and Explanation (String) | Attempt to determine level of internal account data coherence– fuzzy match score between account name and website  | Computed (determine its significance based on contextual analysis)  | Customer  |
 | Customer\_Shell\_Coherence  | Score (0-100) and Explanation (String)  | Attempt to measure how well a customer account’s metadata aligns with its parent shell account– fuzzy match score between customer v shell account | Computed (determine its significance based on contextual analysis)  | Customer  |

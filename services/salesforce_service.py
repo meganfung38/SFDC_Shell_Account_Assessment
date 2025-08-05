@@ -61,7 +61,7 @@ class SalesforceService:
     
     def compute_has_shell_flag(self, account_id: str, parent_account_id: str) -> bool:
         """
-        Compute Has_Shell flag: True if Parent_Account_ID__c points to a different account
+        Compute Has_Shell flag: True if ParentId points to a different account
         False if null or points to itself
         """
         if not parent_account_id:
@@ -101,8 +101,8 @@ class SalesforceService:
             # Query shell account fields needed for comparison
             query = """
             SELECT Id, Name, Website, 
-                   BillingStreet, BillingCity, BillingState, BillingCountry,
-                   ZI_Company_Name__c, ZI_Website__c
+                   BillingState, BillingCountry, BillingPostalCode,
+                   ZI_Company_Name__c, ZI_Website__c, ZI_Company_State__c, ZI_Company_Country__c, ZI_Company_Postal_Code__c
             FROM Account 
             WHERE Id = '{}'
             """.format(shell_account_id)
@@ -159,25 +159,36 @@ class SalesforceService:
         # Helper function to format billing address
         def format_billing_address(data):
             address_parts = []
-            if data.get('BillingStreet'):
-                address_parts.append(data['BillingStreet'])
-            if data.get('BillingCity'):
-                address_parts.append(data['BillingCity'])
             if data.get('BillingState'):
                 address_parts.append(data['BillingState'])
             if data.get('BillingCountry'):
                 address_parts.append(data['BillingCountry'])
+            if data.get('BillingPostalCode'):
+                address_parts.append(data['BillingPostalCode'])
+            return ', '.join(address_parts) if address_parts else None
+        
+        # Helper function to format ZI billing address
+        def format_zi_billing_address(data):
+            address_parts = []
+            if data.get('ZI_Company_State__c'):
+                address_parts.append(data['ZI_Company_State__c'])
+            if data.get('ZI_Company_Country__c'):
+                address_parts.append(data['ZI_Company_Country__c'])
+            if data.get('ZI_Company_Postal_Code__c'):
+                address_parts.append(data['ZI_Company_Postal_Code__c'])
             return ', '.join(address_parts) if address_parts else None
         
         # Customer account data (always present)
         formatted_data = {
             "customer": {
                 "Name": account_data.get('Name'),
-                "Parent_Account_ID__c": account_data.get('Parent_Account_ID__c'),
+                "ParentId": account_data.get('ParentId'),
+                "Parent": account_data.get('Parent'),
                 "Website": account_data.get('Website'),
                 "Billing_Address": format_billing_address(account_data),
                 "ZI_Company_Name__c": account_data.get('ZI_Company_Name__c'),
-                "ZI_Website__c": account_data.get('ZI_Website__c')
+                "ZI_Website__c": account_data.get('ZI_Website__c'),
+                "ZI_Billing_Address": format_zi_billing_address(account_data)
             },
             "flags": {
                 "Has_Shell": account_data.get('Has_Shell', False),
@@ -196,7 +207,8 @@ class SalesforceService:
                 "Website": shell_data.get('Website'),
                 "Billing_Address": format_billing_address(shell_data),
                 "ZI_Company_Name__c": shell_data.get('ZI_Company_Name__c'),
-                "ZI_Website__c": shell_data.get('ZI_Website__c')
+                "ZI_Website__c": shell_data.get('ZI_Website__c'),
+                "ZI_Billing_Address": format_zi_billing_address(shell_data)
             }
             
             # Add shell-related flags
@@ -257,10 +269,12 @@ class SalesforceService:
         """
         enriched_account = account_data.copy()
         
-        # Compute Has_Shell flag
+        # Compute Has_Shell flag - safely access ParentId
+        parent_id = account_data.get('ParentId', '')
+        
         has_shell = self.compute_has_shell_flag(
             account_data.get('Id', ''), 
-            account_data.get('Parent_Account_ID__c', '')
+            parent_id
         )
         enriched_account['Has_Shell'] = has_shell
         
@@ -270,8 +284,8 @@ class SalesforceService:
         
         # If has shell, get shell account data and compute shell-related flags
         shell_account_data = None
-        if has_shell and account_data.get('Parent_Account_ID__c'):
-            shell_account_data = self.get_shell_account_data(account_data['Parent_Account_ID__c'])
+        if has_shell and parent_id:
+            shell_account_data = self.get_shell_account_data(parent_id)
             if shell_account_data:
                 enriched_account['Shell_Account_Data'] = shell_account_data
                 
@@ -370,9 +384,9 @@ class SalesforceService:
             
             # Query for Account fields including custom fields and RecordType
             query = """
-            SELECT Id, Name, Ultimate_Parent_Account_Name__c, Website, 
-                   BillingStreet, BillingCity, BillingState, BillingCountry,
-                   ZI_Company_Name__c, ZI_Website__c, Parent_Account_ID__c, RecordType.Name
+            SELECT Id, Name, ParentId, Parent.Name, Website, 
+                   BillingState, BillingCountry, BillingPostalCode,
+                   ZI_Company_Name__c, ZI_Website__c, ZI_Company_State__c, ZI_Company_Country__c, ZI_Company_Postal_Code__c, RecordType.Name
             FROM Account 
             WHERE Id = '{}'
             """.format(account_id)
@@ -426,9 +440,9 @@ class SalesforceService:
             
             # Base query with Account fields including custom fields and RecordType
             base_query = """
-            SELECT Id, Name, Ultimate_Parent_Account_Name__c, Website, 
-                   BillingStreet, BillingCity, BillingState, BillingCountry,
-                   ZI_Company_Name__c, ZI_Website__c, Parent_Account_ID__c, RecordType.Name
+            SELECT Id, Name, ParentId, Parent.Name, Website, 
+                   BillingState, BillingCountry, BillingPostalCode,
+                   ZI_Company_Name__c, ZI_Website__c, ZI_Company_State__c, ZI_Company_Country__c, ZI_Company_Postal_Code__c, RecordType.Name
             FROM Account
             """
             
@@ -792,10 +806,10 @@ class SalesforceService:
             # Build batch query for all account IDs including custom fields and RecordType
             ids_string = "', '".join(query_account_ids)
             batch_query = f"""
-            SELECT Id, Name, Ultimate_Parent_Account_Name__c, Website, 
-                   BillingStreet, BillingCity, BillingState, BillingCountry,
-                   ZI_Company_Name__c, ZI_Website__c, Parent_Account_ID__c, RecordType.Name
-            FROM Account 
+            SELECT Id, Name, ParentId, Parent.Name, Website, 
+                   BillingState, BillingCountry, BillingPostalCode,
+                   ZI_Company_Name__c, ZI_Website__c, ZI_Company_State__c, ZI_Company_Country__c, ZI_Company_Postal_Code__c, RecordType.Name
+            FROM Account
             WHERE Id IN ('{ids_string}')
             """
             

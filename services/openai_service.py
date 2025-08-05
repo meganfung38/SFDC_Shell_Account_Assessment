@@ -24,15 +24,16 @@ For each record, you will output a JSON object with:
 | Field | Data Type | Description | Trust Level | For Which Account? |
 |-------|-----------|-------------|-------------|-------------------|
 | Name | String | Company/ Organization/ Personal Name | Trusted | Customer Parent |
-| Parent_Account_ID__c | String (15 character SFDC ID) | SFDC ID linking customer to its shell | Trusted | Customer |
+| ParentId | String (18 character SFDC ID) | SFDC ID linking customer to its shell | Trusted | Customer |
 | Website | String | Website owned by the account | Trusted | Customer Parent |
-| Billing Address | String | Full billing address | Trusted | Customer Parent |
+| Billing_Address | String | State, Country, Postal Code | Trusted | Customer Parent |
 | ZI_Company_Name__c | String | ZoomInfo enriched company/ organization name | Semi-reliable (enriched data– could be inaccurate) | Customer Parent |
 | ZI_Website__c | String | ZoomInfo enriched website | Semi-reliable (enriched data– could be inaccurate) | Customer Parent |
+| ZI_Billing_Address | String | ZoomInfo enriched State, Country, Postal Code | Semi-reliable (enriched data– could be inaccurate) | Customer Parent |
 | Has_Shell | Boolean | TRUE if the account rolls up to a shell account | Trusted | Customer |
 | Customer_Consistency | Score (0-100) and Explanation (String) | Attempt to determine level of internal account data coherence– fuzzy match score between account name and website | Computed (determine its significance based on contextual analysis) | Customer |
 | Customer_Shell_Coherence | Score (0-100) and Explanation (String) | Attempt to measure how well a customer account's metadata aligns with its parent shell account– fuzzy match score between customer v shell account | Computed (determine its significance based on contextual analysis) | Customer |
-| Address_Consistency | Boolean and Explanation (String) | TRUE if customer and shell account billing addresses match | Computed (determine its significance based on contextual analysis) | Customer |
+| Address_Consistency | Boolean and Explanation (String) | TRUE if customer and shell account addresses match using precedence: Customer Billing_Address vs Parent ZI_Billing_Address (with fallbacks) | Computed (determine its significance based on contextual analysis) | Customer |
 
 ## 2 Validation– Is This a Valid Shell Relationship?
 
@@ -47,8 +48,9 @@ Apply a layered validation process. You are required to use your world knowledge
     * You must determine whether the customer is a known subsidiary, franchise, individual representative, department, regional office, or branch of the shell using external validation and world knowledge:
     * What does the Customer_Shell_Coherence score say about the relationship between the customer and parent shell account?
     * Do external sources agree that the customer account has some corporate relationship to its parent shell account?
-  * Billing address match: compare full billing addresses
+  * Billing address match: compare addresses using precedence (Customer Billing vs Parent ZI, with fallbacks)
     * What does Address_Consistency say about the relationship between the customer and parent shell account?
+    * The explanation will specify which exact address fields were compared (e.g., Customer Billing_Address vs Parent ZI_Billing_Address)
     * Consider acceptable mismatches for independent agents, remote offices, known geographic spread
     * Do not penalize mismatches when world knowledge supports the relationship (e.g., remote agents or franchise operators)
 

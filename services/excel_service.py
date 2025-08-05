@@ -301,9 +301,9 @@ class ExcelService:
                 # Account Identification (Frozen)
                 "Account ID", "Account Name",
                 # Account Metadata
-                "Record Type", "Parent Account ID", "Ultimate Parent", "Website", 
-                "Billing Street", "Billing City", "Billing State", "Billing Country",
-                "ZI Company", "ZI Website",
+                "Record Type", "Parent ID", "Parent Name", "Website", 
+                "Billing State", "Billing Country", "Billing Postal Code",
+                "ZI Company", "ZI Website", "ZI State", "ZI Country", "ZI Postal Code",
                 # Assessment Flags
                 "Has Shell", "Has Shell Explanation",
                 "Customer Consistency Score", "Customer Consistency Explanation",
@@ -342,15 +342,17 @@ class ExcelService:
                     account.get('Name', ''),
                     # Account Metadata
                     account.get('RecordType', {}).get('Name', ''),
-                    account.get('Parent_Account_ID__c', ''),
-                    account.get('Ultimate_Parent_Account_Name__c', ''),
+                    account.get('ParentId', ''),
+                    account.get('Parent', {}).get('Name', '') if account.get('Parent') else '',
                     account.get('Website', ''),
-                    account.get('BillingStreet', ''),
-                    account.get('BillingCity', ''),
                     account.get('BillingState', ''),
                     account.get('BillingCountry', ''),
+                    account.get('BillingPostalCode', ''),
                     account.get('ZI_Company_Name__c', ''),
                     account.get('ZI_Website__c', ''),
+                    account.get('ZI_Company_State__c', ''),
+                    account.get('ZI_Company_Country__c', ''),
+                    account.get('ZI_Company_Postal_Code__c', ''),
                     # Assessment Flags
                     "✅ True" if account.get('Has_Shell', False) else "❌ False",
                     has_shell_explanation,

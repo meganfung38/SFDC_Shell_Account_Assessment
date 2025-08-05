@@ -87,15 +87,21 @@ class BadDomainService:
                 return bad_domain
         
         # Pattern 2: Missing common TLDs - try to extract base domain
-        # If domain has unusual ending, check if base + .com/.net/.org is bad
+        # ONLY for clearly malformed TLDs (not valid TLDs like .xyz, .io, etc.)
         if '.' in domain:
             parts = domain.split('.')
             if len(parts) >= 2:
                 base_domain = '.'.join(parts[:-1])  # Everything except last part
-                for common_tld in ['com', 'net', 'org']:
-                    potential_domain = f"{base_domain}.{common_tld}"
-                    if potential_domain in self.bad_domains:
-                        return potential_domain
+                tld = parts[-1]
+                
+                # Only apply this pattern for clearly invalid/malformed TLDs
+                # Don't convert legitimate TLDs like .xyz, .io, .co, etc.
+                invalid_tlds = ['comno', 'comxyz', 'com123', 'netno', 'orgno', 'comabc']
+                if tld in invalid_tlds or (tld.isalnum() and len(tld) > 4):
+                    for common_tld in ['com', 'net', 'org']:
+                        potential_domain = f"{base_domain}.{common_tld}"
+                        if potential_domain in self.bad_domains:
+                            return potential_domain
         
         # Return original domain if no patterns matched
         return domain

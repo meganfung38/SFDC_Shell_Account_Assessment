@@ -241,7 +241,8 @@ All workflows produce consistent, collapsible output with:
 - **Excel Input**: Original Excel data + AI confidence score and explanation appended to the right
 - **Summary Tables**: Processing statistics and confidence score metrics
 - **RingCentral Theming**: Professional styling with corporate colors
-- **Sample Export**: [View sample SOQL analysis export](https://docs.google.com/spreadsheets/d/1Ft1QBTmOTTPEjQGNhYmzAFUUiCoFyatc/edit?usp=sharing&ouid=113726783832302437979&rtpof=true&sd=true)
+- **Sample Export**: [View sample SOQL analysis export](https://docs.google.com/spreadsheets/d/1N_o4rBYNrakOTZS25jTi7mx8AzqezeW0/edit?usp=sharing&ouid=113726783832302437979&rtpof=true&sd=true)
+- **Bad Domain Sample**: [View bad domain filtering example](https://docs.google.com/spreadsheets/d/1lR7YUN0i72QUC4spYk-xHTFDn-P3rk0p/edit?usp=sharing&ouid=113726783832302437979&rtpof=true&sd=true)
 - **Demo Walkthrough**: [Watch demo walkthrough](https://drive.google.com/file/d/1Y5TNF1La23kzbGhlaSc8GCIp3Fu11Uwo/view?usp=sharing) 
 
 ---

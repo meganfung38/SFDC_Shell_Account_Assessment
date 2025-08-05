@@ -397,6 +397,13 @@ def create_excel_analysis_export(accounts, original_data, excel_info):
     """Create Excel export for Excel input analysis"""
 ```
 
+**Export Features**:
+- Comprehensive account metadata and assessment flags
+- AI confidence scores and detailed explanations  
+- RingCentral corporate theming and professional formatting
+- **Sample Export**: [View sample analysis report](https://docs.google.com/spreadsheets/d/1N_o4rBYNrakOTZS25jTi7mx8AzqezeW0/edit?usp=sharing&ouid=113726783832302437979&rtpof=true&sd=true)
+- **Bad Domain Sample**: [View bad domain filtering example](https://docs.google.com/spreadsheets/d/1lR7YUN0i72QUC4spYk-xHTFDn-P3rk0p/edit?usp=sharing&ouid=113726783832302437979&rtpof=true&sd=true)
+
 ---
 
 ## 🎨 **Frontend (`static/` and `templates/`)**

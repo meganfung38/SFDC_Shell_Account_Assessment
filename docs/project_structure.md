@@ -403,6 +403,7 @@ def create_excel_analysis_export(accounts, original_data, excel_info):
 - RingCentral corporate theming and professional formatting
 - **Sample Export**: [View sample analysis report](https://docs.google.com/spreadsheets/d/1N_o4rBYNrakOTZS25jTi7mx8AzqezeW0/edit?usp=sharing&ouid=113726783832302437979&rtpof=true&sd=true)
 - **Bad Domain Sample**: [View bad domain filtering example](https://docs.google.com/spreadsheets/d/1lR7YUN0i72QUC4spYk-xHTFDn-P3rk0p/edit?usp=sharing&ouid=113726783832302437979&rtpof=true&sd=true)
+- **Latest Changes Demo**: [View recent feature updates](https://drive.google.com/file/d/1xoAItHK8u5FYcGWQhFZL8NRi3TYsIcb5/view?usp=sharing)
 
 ---
 

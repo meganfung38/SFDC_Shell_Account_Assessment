@@ -184,8 +184,8 @@ def test_openai_connection():
 
 **Key Responsibilities**:
 - Salesforce connection management
-- Account data retrieval (12 fields)
-- Flag computation (4 assessment flags)
+- Account data retrieval (13 fields)
+- Flag computation (5 assessment flags including bad domain detection)
 - AI assessment integration
 - SOQL query validation and execution
 
@@ -217,13 +217,19 @@ def get_accounts_data_by_ids(self, account_ids):
     """Batch retrieve accounts with full assessment"""
 ```
 
-**Salesforce Fields Queried (12 fields)**:
+**Salesforce Fields Queried (13 fields)**:
 - Standard fields: `Id`, `Name`, `Website`, `RecordType.Name`
+- Contact information: `ContactMostFrequentEmail__c`
 - Billing address: `BillingState`, `BillingCountry`, `BillingPostalCode`  
 - ZI enriched data: `ZI_Company_Name__c`, `ZI_Website__c`, `ZI_Company_State__c`, `ZI_Company_Country__c`, `ZI_Company_Postal_Code__c`
 - Parent relationship: `ParentId`, `Parent.Name`
 
 #### **Flag Computation**
+```python
+def compute_bad_domain_flag(self, account):
+    """Compute Bad_Domain flag (Boolean) - filters accounts with consumer/test domains"""
+```
+
 ```python
 def compute_has_shell_flag(self, account):
     """Compute Has_Shell flag (Boolean) - checks ParentId existence"""
@@ -328,6 +334,38 @@ def compute_address_consistency(customer_account, shell_account):
 - Customer: Billing_Address → ZI_Billing_Address (fallback)
 - Parent: ZI_Billing_Address → Billing_Address (fallback)
 - Shows exact fields compared in explanations
+
+### **`services/bad_domain_service.py`** - Domain Quality Filtering
+**Purpose**: Bad domain detection and data quality filtering
+
+**Key Responsibilities**:
+- Load and manage bad domain list from CSV
+- Extract domains from email addresses and websites
+- Intelligent pattern matching for malformed domains
+- Subdomain detection and normalization
+
+**Key Functions**:
+```python
+def check_account_for_bad_domains(account_data):
+    """Check account for bad domains in email and website fields"""
+```
+
+```python
+def extract_domain_from_email(email):
+    """Extract and clean domain from email address"""
+```
+
+```python
+def extract_domain_from_url(url):
+    """Extract and clean domain from website URL"""
+```
+
+**Domain Detection Features**:
+- **Exact Matches**: Direct bad domain detection
+- **Subdomain Detection**: `test.ringcentral.com` → `ringcentral.com`
+- **Malformed Domain Handling**: `gmail.comno` → `gmail.com`
+- **Pattern Recognition**: Intelligent cleanup of corrupted domain data
+- **CSV-based Configuration**: 397+ bad domains loaded from external file
 
 ### **`services/excel_service.py`** - File Processing & Export
 **Purpose**: Excel file parsing, data extraction, and export generation
@@ -542,8 +580,9 @@ Service Layer → Salesforce API → Account Data (12 fields) → Flag Computati
 
 ### **3. Assessment Processing**
 ```
-Account Data → Flag Computation → AI Assessment → Formatted Output
+Account Data → Bad Domain Check → Flag Computation (if clean) → AI Assessment → Formatted Output
 ```
+**Note**: If bad domain detected, processing stops immediately with only Bad_Domain flag returned.
 
 ### **4. Response Generation**
 ```

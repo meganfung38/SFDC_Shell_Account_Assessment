@@ -359,20 +359,32 @@ Billing Address: ${formatBillingAddress(account)}
 ZI Company: ${account.ZI_Company_Name__c || 'N/A'}
 ZI Website: ${account.ZI_Website__c || 'N/A'}
 ZI Billing Address: ${formatZIBillingAddress(account)}
+Contact Most Frequent Email: ${account.ContactMostFrequentEmail__c || 'N/A'}
 Parent ID: ${account.ParentId || 'No parent linked'}
 Parent: ${account.Parent?.Name || 'No parent linked'}
 </details>`;
 
     // Relationship Assessment Flags Section
     output += `<details>
-<summary>🔍 Relationship Assessment Flags</summary>Has Shell: ${account.Has_Shell ? '✅ True' : '❌ False'}
+<summary>🔍 Relationship Assessment Flags</summary>`;
+
+    // Check for Bad_Domain flag first - if present and true, show only this flag
+    if (account.Bad_Domain && account.Bad_Domain.is_bad) {
+        output += `Bad Domain: ❌ True
+  └─ ${account.Bad_Domain.explanation}`;
+    } else {
+        // Show all other flags only if no bad domain detected
+        output += `Bad Domain: ✅ False
+${account.Has_Shell !== undefined ? `Has Shell: ${account.Has_Shell ? '✅ True' : '❌ False'}` : ''}
 ${account.Customer_Consistency ? `Customer Consistency: ${account.Customer_Consistency.score}/100
   └─ ${account.Customer_Consistency.explanation}` : ''}
 ${account.Customer_Shell_Coherence ? `Customer-Shell Coherence: ${account.Customer_Shell_Coherence.score}/100
   └─ ${account.Customer_Shell_Coherence.explanation}` : ''}
 ${account.Address_Consistency ? `Address Consistency: ${account.Address_Consistency.is_consistent ? '✅ True' : '❌ False'}
-  └─ ${account.Address_Consistency.explanation}` : ''}
-</details>`;
+  └─ ${account.Address_Consistency.explanation}` : ''}`;
+    }
+    
+    output += `</details>`;
 
     // Parent Shell Account Data Section
     if (account.Shell_Account_Data) {

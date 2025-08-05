@@ -1,6 +1,7 @@
 from simple_salesforce.api import Salesforce
 from config.config import Config
 from services.fuzzy_matching_service import FuzzyMatchingService
+from services.bad_domain_service import BadDomainService
 from services.openai_service import ask_openai, client, get_system_prompt
 from typing import Optional, Dict, Any
 import json
@@ -16,6 +17,7 @@ class SalesforceService:
         self.fuzzy_matcher = FuzzyMatchingService()
         self._last_connection_time = 0
         self._connection_timeout = 3600  # 1 hour in seconds
+        self.bad_domain_service = BadDomainService()
     
     def _convert_15_to_18_char_id(self, id_15):
         """Convert 15-character Salesforce ID to 18-character format"""
@@ -153,6 +155,18 @@ class SalesforceService:
             'explanation': explanation
         }
     
+    def compute_bad_domain_flag(self, account_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Compute Bad_Domain flag by checking email and website domains against bad domain list
+        Returns dict with boolean result and explanation
+        """
+        is_bad, explanation = self.bad_domain_service.check_account_for_bad_domains(account_data)
+        
+        return {
+            'is_bad': is_bad,
+            'explanation': explanation
+        }
+    
     def format_data_for_openai(self, account_data: Dict[str, Any]) -> Dict[str, Any]:
         """Format account data according to the system prompt specification"""
         
@@ -269,6 +283,15 @@ class SalesforceService:
         """
         enriched_account = account_data.copy()
         
+        # FIRST: Check for bad domains - if found, stop all further analysis
+        bad_domain_flag = self.compute_bad_domain_flag(account_data)
+        enriched_account['Bad_Domain'] = bad_domain_flag
+        
+        # If bad domain detected, stop here - no further analysis
+        if bad_domain_flag.get('is_bad', False):
+            return enriched_account
+        
+        # If clean domain, proceed with full analysis
         # Compute Has_Shell flag - safely access ParentId
         parent_id = account_data.get('ParentId', '')
         
@@ -386,7 +409,8 @@ class SalesforceService:
             query = """
             SELECT Id, Name, ParentId, Parent.Name, Website, 
                    BillingState, BillingCountry, BillingPostalCode,
-                   ZI_Company_Name__c, ZI_Website__c, ZI_Company_State__c, ZI_Company_Country__c, ZI_Company_Postal_Code__c, RecordType.Name
+                   ZI_Company_Name__c, ZI_Website__c, ZI_Company_State__c, ZI_Company_Country__c, ZI_Company_Postal_Code__c, 
+                   ContactMostFrequentEmail__c, RecordType.Name
             FROM Account 
             WHERE Id = '{}'
             """.format(account_id)
@@ -442,7 +466,8 @@ class SalesforceService:
             base_query = """
             SELECT Id, Name, ParentId, Parent.Name, Website, 
                    BillingState, BillingCountry, BillingPostalCode,
-                   ZI_Company_Name__c, ZI_Website__c, ZI_Company_State__c, ZI_Company_Country__c, ZI_Company_Postal_Code__c, RecordType.Name
+                   ZI_Company_Name__c, ZI_Website__c, ZI_Company_State__c, ZI_Company_Country__c, ZI_Company_Postal_Code__c, 
+                   ContactMostFrequentEmail__c, RecordType.Name
             FROM Account
             """
             
@@ -808,7 +833,8 @@ class SalesforceService:
             batch_query = f"""
             SELECT Id, Name, ParentId, Parent.Name, Website, 
                    BillingState, BillingCountry, BillingPostalCode,
-                   ZI_Company_Name__c, ZI_Website__c, ZI_Company_State__c, ZI_Company_Country__c, ZI_Company_Postal_Code__c, RecordType.Name
+                   ZI_Company_Name__c, ZI_Website__c, ZI_Company_State__c, ZI_Company_Country__c, ZI_Company_Postal_Code__c, 
+                   ContactMostFrequentEmail__c, RecordType.Name
             FROM Account
             WHERE Id IN ('{ids_string}')
             """

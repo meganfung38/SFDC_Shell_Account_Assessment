@@ -25,13 +25,15 @@ Inconsistencies in data and incorrect associations have led to misaligned parent
 The system is **fully functional** with all core features implemented and operational:
 
 #### **🎯 Core Assessment Features**
-- **✅ Relationship Assessment Flags**: All 4 required flags implemented and computed
+- **✅ Relationship Assessment Flags**: All 5 assessment flags implemented and computed
+  - `Bad_Domain`: Boolean flag for filtering accounts with consumer/test email domains and websites
   - `Has_Shell`: Boolean flag indicating if account has a parent shell
   - `Customer_Consistency`: Fuzzy match score (0-100) for name/website alignment
   - `Customer_Shell_Coherence`: Fuzzy match score (0-100) for customer-shell metadata alignment
   - `Address_Consistency`: Boolean flag for billing address matching
 - **✅ AI-Powered Confidence Scoring**: OpenAI GPT-4o integration with comprehensive system prompt
 - **✅ Explainability**: Detailed AI-generated explanations with confidence scores and reasoning bullets
+- **✅ Data Quality Filtering**: Automatic detection and filtering of bad domains to prevent analysis of low-quality accounts
 
 #### **🌐 Web Interface & API Endpoints**
 - **✅ Full-featured web UI** at `/` with three input methods:
@@ -41,7 +43,7 @@ The system is **fully functional** with all core features implemented and operat
 - **✅ RESTful API** with comprehensive endpoints for all functionality
 - **✅ Real-time validation** and error handling across all workflows
 
-#### **📊 Account Data Retrieval (12 Fields)**
+#### **📊 Account Data Retrieval (13 Fields)**
 The system queries these fields for comprehensive account analysis:
 
 **Standard Fields:**
@@ -49,6 +51,9 @@ The system queries these fields for comprehensive account analysis:
 - `Name` - Account name
 - `Website` - Account's website URL
 - `RecordType.Name` - Account type (Shell vs Customer)
+
+**Contact Information:**
+- `ContactMostFrequentEmail__c` - Most frequently used contact email
 
 **Address Fields:**
 - `BillingState`, `BillingCountry`, `BillingPostalCode` - Billing address components
@@ -103,11 +108,13 @@ services/
 ├── openai_service.py       # AI prompt management and completion
 ├── excel_service.py        # File processing and validation
 ├── fuzzy_matching_service.py # String similarity and domain analysis
+├── bad_domain_service.py   # Bad domain detection and filtering
 ```
 
 ### **Key Components**
 
 #### **Flag Computation Engine**
+- **Bad_Domain**: Detects consumer/test domains in email and website fields with intelligent pattern matching
 - **Has_Shell**: Validates parent account relationships using `ParentId` field
 - **Customer_Consistency**: Fuzzy matching between account name and website/ZI data
 - **Customer_Shell_Coherence**: Multi-dimensional comparison with detailed field-level explanations

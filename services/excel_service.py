@@ -304,7 +304,9 @@ class ExcelService:
                 "Record Type", "Parent ID", "Parent Name", "Website", 
                 "Billing State", "Billing Country", "Billing Postal Code",
                 "ZI Company", "ZI Website", "ZI State", "ZI Country", "ZI Postal Code",
+                "Contact Most Frequent Email",
                 # Assessment Flags
+                "Bad Domain", "Bad Domain Explanation",
                 "Has Shell", "Has Shell Explanation",
                 "Customer Consistency Score", "Customer Consistency Explanation",
                 "Customer-Shell Coherence Score", "Customer-Shell Coherence Explanation",
@@ -335,6 +337,9 @@ class ExcelService:
                 ai_bullets = ai_assessment.get('explanation_bullets', [])
                 ai_analysis = "\n".join([f"• {bullet}" for bullet in ai_bullets]) if ai_bullets else "No AI analysis available"
                 
+                # Get assessment flag explanations
+                bad_domain_explanation = account.get('Bad_Domain', {}).get('explanation', '')
+                
                 # Create row data
                 row_data = [
                     # Account Identification
@@ -353,7 +358,10 @@ class ExcelService:
                     account.get('ZI_Company_State__c', ''),
                     account.get('ZI_Company_Country__c', ''),
                     account.get('ZI_Company_Postal_Code__c', ''),
+                    account.get('ContactMostFrequentEmail__c', ''),
                     # Assessment Flags
+                    "❌ True" if account.get('Bad_Domain', {}).get('is_bad', False) else "✅ False",
+                    bad_domain_explanation,
                     "✅ True" if account.get('Has_Shell', False) else "❌ False",
                     has_shell_explanation,
                     f"{account.get('Customer_Consistency', {}).get('score', 0)}/100",

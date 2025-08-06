@@ -29,7 +29,7 @@ For each record, you will output a JSON object with:
 | Has\_Shell  | Boolean  | TRUE if the account rolls up to a shell account  | Trusted  | Customer  |
 | Customer\_Consistency  | Score (0-100) and Explanation (String) | Attempt to determine level of internal account data coherence– fuzzy match score between account name and website  | Computed (determine its significance based on contextual analysis)  | Customer  |
 | Customer\_Shell\_Coherence  | Score (0-100) and Explanation (String)  | Attempt to measure how well a customer account’s metadata aligns with its parent shell account– fuzzy match score between customer v shell account | Computed (determine its significance based on contextual analysis)  | Customer  |
-| Address\_Consistency  | Boolean and Explanation (String)   | TRUE if customer and shell account billing addresses match  | Computed (determine its significance based on contextual analysis) | Customer  |
+| Address\_Consistency  | Boolean and Explanation (String)   | TRUE if customer and shell account addresses match using precedence: Customer Billing_Address vs Parent ZI_Billing_Address (with fallbacks)  | Computed (determine its significance based on contextual analysis) | Customer  |
 
 ## **2 Validation– Is This a Valid Shell Relationship?** 
 
@@ -44,8 +44,9 @@ Apply a layered validation process. You are required to use your world knowledge
     * You must determine whether the customer is a known subsidiary, franchise, individual representative, department, regional office, or branch of the shell using external validation and world knowledge:   
     * What does the Customer\_Shell\_Coherence score say about the relationship between the customer and parent shell account?   
     * Do external sources agree that the customer account has some corporate relationship to its parent shell account?   
-  * Billing address match: compare full billing addresses  
+  * Billing address match: compare addresses using precedence (Customer Billing vs Parent ZI, with fallbacks)
     * What does Address\_Consistency say about the relationship between the customer and parent shell account?   
+    * The explanation will specify which exact address fields were compared (e.g., Customer Billing_Address vs Parent ZI_Billing_Address)
     * Consider acceptable mismatches for independent agents, remote offices, known geographic spread  
     * Do not penalize mismatches when world knowledge supports the relationship (e.g., remote agents or franchise operators) 
 

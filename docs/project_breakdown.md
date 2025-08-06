@@ -44,6 +44,7 @@
 | *Parent Account ID*  | 18 Character SFDC Id | ParentId |
 | *Parent Account Name*  | Shell Account Company/ Organization | Parent.Name |
 | *Website*  | Associated Website | Website |
+| *Contact Most Frequent Email*  | Associated Email | ContactMostFrequentEmail__c |
 | *Billing Address*  | Location  | BillingState, BillingCountry, BillingPostalCode |
 | *ZI Company Name*  | ZoomInfo Enriched Company Name | ZI\_Company\_Name\_\_c |
 | *ZI Website* | ZoomInfo Enriched Company Name | ZI\_Website\_\_c  |
@@ -53,11 +54,15 @@
 
 | Flags  | Data Type | Meaning  |
 | :---- | :---- | :---- |
+| Bad\_Domain  | Boolean (True/ False) | Whether ContactMostFrequentEmail__c or Website has a bad domain. If TRUE, skip further analysis. |
 | Has\_Shell  | Boolean (True/ False) | Whether ParentId is null or points to itself |
 | Customer\_Consistency   | Fuzzy Match Score (0-100) | Whether the account name and website align |
 | Customer\_Shell\_Coherence  | Fuzzy Match Score (0-100) | Whether the customer account metadata aligns with its shell's metadata (name and website) ONLY compute if Has\_Shell is TRUE |
-| Address\_Consistency | Boolean (True/ False) | Whether the customer and shell billing addresses match ONLY compute if Has\_Shell is TRUE |
+| Address\_Consistency | Boolean (True/ False) | Whether the customer billing address and shell ZI billing address match ONLY compute if Has\_Shell is TRUE |
 
+3. Bad Domains 
+* Accounts flagged with Bad_Domain indicate that the account uses a free or invalid email/ website domain. These accounts will be excluded from further analysis. 
+ 
 2. Confidence Score Generation  
 * Design a hybrid model that uses fuzzy logic, contextual analysis, and LLM prompts to evaluate the validity of each account-to-shell relationship  
   * **Flag verification**: Leverage Customer\_Consistency and Customer\_Shell\_Coherence similarity scores as signals   
